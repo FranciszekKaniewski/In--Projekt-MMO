@@ -2,6 +2,8 @@
 #include <string>
 #include "../Vendor/SDL2/include/SDL2/SDL.h"
 
+class SceneManager;
+
 class App {
 public:
     App() {};
@@ -15,6 +17,8 @@ public:
     SDL_Window *window;
     static SDL_Renderer *renderer;
     static SDL_Event event;
+
+    static SceneManager* sceneManager;
 
 //    static Audio audio;
 

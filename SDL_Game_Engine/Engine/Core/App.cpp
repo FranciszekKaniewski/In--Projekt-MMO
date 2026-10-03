@@ -8,11 +8,13 @@
 #include "iostream"
 
 #include "./Config.h"
+#include "../Scenes/SceneManager.h"
 
 
 SDL_Renderer* App::renderer = nullptr;
 SDL_Event App::event;
 float App::deltaTime = 0.0f;
+SceneManager* App::sceneManager = new SceneManager();
 
 void App::init(const char* configPath) {
     AppConfig cfg;
@@ -63,12 +65,17 @@ void App::init(const char* configPath) {
         }
 
         isRunning = true;
+        sceneManager->changeScene(createScene1, *this);
     } else {
         isRunning = false;
     }
 }
 
-void App::update() {}
+void App::update() {
+    if (sceneManager->activeScene) {
+        sceneManager->activeScene->update(*this);
+    }
+}
 
 void App::handleEvents() {
     while (SDL_PollEvent(&event)) {
@@ -83,18 +90,30 @@ void App::handleEvents() {
                 break;
             default: ;
         }
+
+        if (sceneManager->activeScene) {
+            sceneManager->activeScene->handleEvents(*this, event);
+        }
     }
 }
 
 void App::render() {
-    SDL_RenderClear(renderer);
+    if (sceneManager->activeScene) {
+        sceneManager->activeScene->render(*this);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+    }
 
     SDL_RenderPresent(renderer);
 }
 
 void App::clean() {
+    sceneManager->closeScene(*this);
+    delete sceneManager;
+
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
     SDL_Quit();
     std::cout << "Game closed!" << std::endl;
-};
+}
