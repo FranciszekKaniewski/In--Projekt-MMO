@@ -1,0 +1,12 @@
+{
+  "window": {
+    "title": "My Super Game",
+    "width": 1280,
+    "height": 720,
+    "fullscreen": false
+  },
+  "game": {
+    "fps": 60,
+    "devMode": true
+  }
+}

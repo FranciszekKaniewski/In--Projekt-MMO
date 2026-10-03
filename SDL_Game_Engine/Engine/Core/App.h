@@ -1,0 +1,27 @@
+#pragma once
+#include <string>
+#include "../Vendor/SDL2/include/SDL2/SDL.h"
+
+class App {
+public:
+    App() {};
+    ~App() {};
+
+    std::string title;
+    static float deltaTime;
+    bool isRunning = false;
+    bool devMode = false;
+
+    SDL_Window *window;
+    static SDL_Renderer *renderer;
+    static SDL_Event event;
+
+//    static Audio audio;
+
+    void init(const char* configPath);
+    void update();
+    void handleEvents();
+    void render();
+    void clean();
+private:
+};
