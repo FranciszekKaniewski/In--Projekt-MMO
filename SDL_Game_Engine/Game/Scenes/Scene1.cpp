@@ -7,6 +7,15 @@ public:
 
     void onEnter(App& app) override {
         std::cout << "Entering Scene 1!" << std::endl;
+
+        uiLayer = new UILayer(app);
+        uiLayer->addBox({-1,-1,600,400});
+        uiLayer->addBox({-1,50,600,100}, {200,200,200,255});
+        uiLayer->addBox({-1,app.getWindowSize().height-100-50,1000,100}, {180,180,180,255});
+    }
+
+    void onExit(App& app) override {
+        delete uiLayer;
     }
 
     void handleEvents(App& app, SDL_Event &event) override {

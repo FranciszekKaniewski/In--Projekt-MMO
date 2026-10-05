@@ -37,6 +37,8 @@ void App::init(const char* configPath) {
     int xpos = SDL_WINDOWPOS_CENTERED;
     int ypos = SDL_WINDOWPOS_CENTERED;
 
+    SDL_setenv("SDL_AUDIODRIVER", "directsound", 1);
+
     if(SDL_Init(SDL_INIT_EVERYTHING) == 0){
         std::cout << "SDL works!" << std::endl;
 
@@ -55,6 +57,8 @@ void App::init(const char* configPath) {
             std::cerr << "TTF_Init error: " << TTF_GetError() << std::endl;
             return;
         }
+        std::cout << "TFF Initialized!" << std::endl;
+
         if (Mix_Init(MIX_INIT_MP3) == 0) {
             std::cerr << "Mix_Init Error: " << Mix_GetError() << std::endl;
             return;
@@ -63,6 +67,7 @@ void App::init(const char* configPath) {
             std::cerr << "Mix_OpenAudio Error: " << Mix_GetError() << std::endl;
             return;
         }
+        std::cout << "Audio Initialized!" << std::endl;
 
         isRunning = true;
         sceneManager->changeScene(createScene1, *this);

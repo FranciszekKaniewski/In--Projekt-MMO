@@ -4,6 +4,11 @@
 
 class SceneManager;
 
+struct WindowSize {
+    int wight;
+    int height;
+};
+
 class App {
 public:
     App() {};
@@ -19,6 +24,12 @@ public:
     static SDL_Event event;
 
     static SceneManager* sceneManager;
+
+    WindowSize getWindowSize() {
+        int w,h;
+        SDL_GetWindowSize(this->window,&w, &h);
+        return {w,h};
+    };
 
 //    static Audio audio;
 
