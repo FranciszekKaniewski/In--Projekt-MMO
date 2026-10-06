@@ -116,8 +116,8 @@ void App::clean() {
     sceneManager->closeScene(*this);
     delete sceneManager;
 
-    SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
     SDL_Quit();
     std::cout << "Game closed!" << std::endl;
 }

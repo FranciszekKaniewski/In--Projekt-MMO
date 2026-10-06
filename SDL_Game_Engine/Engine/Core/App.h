@@ -19,7 +19,7 @@ public:
     bool isRunning = false;
     bool devMode = false;
 
-    SDL_Window *window;
+    SDL_Window *window = nullptr;
     static SDL_Renderer *renderer;
     static SDL_Event event;
 
