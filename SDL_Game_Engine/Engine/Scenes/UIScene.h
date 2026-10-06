@@ -18,7 +18,7 @@ public:
     virtual ~UIScene() = default;
 
     void handleEvents(App& app, SDL_Event &event) override {
-        if(uiLayer) uiLayer->handleEvents();
+        handleUIEvents(event);
     }
     void update(App& app) override {}
 
@@ -33,5 +33,9 @@ public:
     void onExit(App& app) override {}
 
 protected:
+    bool handleUIEvents(const SDL_Event& event) {
+        return uiLayer && uiLayer->handleEvents(event);
+    }
+
     void clear() {}
 };

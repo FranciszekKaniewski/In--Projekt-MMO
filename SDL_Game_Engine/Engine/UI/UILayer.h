@@ -8,33 +8,83 @@ class UILayer {
 private:
     std::vector<UIBox*> boxes;
     App& app;
+    Input* focusedInput = nullptr;
+    UIBox* focusedBox = nullptr;
+
+    void focusInput(Input* input, UIBox* box = nullptr) {
+        if(focusedInput == input) return;
+
+        if(focusedInput) focusedInput->setFocused(false);
+        focusedInput = input;
+        focusedBox = box;
+        if(focusedInput) focusedInput->setFocused(true);
+    }
 
 public:
     UILayer(App& app) : app(app){};
 
-    void handleEvents(){
+    UILayer(const UILayer&) = delete;
+    UILayer& operator=(const UILayer&) = delete;
+
+    ~UILayer() {
+        clean();
+    }
+
+    bool handleEvents(){
+        return handleEvents(app.event);
+    }
+
+    bool handleEvents(const SDL_Event& event){
+        if(event.type == SDL_WINDOWEVENT &&
+           event.window.event == SDL_WINDOWEVENT_FOCUS_LOST){
+            focusInput(nullptr);
+            return false;
+        }
+
         int x, y;
         SDL_GetMouseState(&x, &y);
 
-        if (app.event.type == SDL_MOUSEMOTION) {
-            x = app.event.motion.x;
-            y = app.event.motion.y;
-        } else if (app.event.type == SDL_MOUSEBUTTONDOWN ||
-                   app.event.type == SDL_MOUSEBUTTONUP) {
-            x = app.event.button.x;
-            y = app.event.button.y;
+        if (event.type == SDL_MOUSEMOTION) {
+            x = event.motion.x;
+            y = event.motion.y;
+        } else if (event.type == SDL_MOUSEBUTTONDOWN ||
+                   event.type == SDL_MOUSEBUTTONUP) {
+            x = event.button.x;
+            y = event.button.y;
         }
 
         for(UIBox* box : boxes){
             box->updateMousePosClick(x,y);
         }
 
-        if (app.event.type == SDL_MOUSEBUTTONDOWN &&
-            app.event.button.button == SDL_BUTTON_LEFT) {
+        if (event.type == SDL_MOUSEBUTTONDOWN &&
+            event.button.button == SDL_BUTTON_LEFT) {
+            Input* clickedInput = nullptr;
+            UIBox* clickedBox = nullptr;
+
+            for(auto it = boxes.rbegin(); it != boxes.rend(); ++it){
+                clickedInput = (*it)->getInputAtPoint(x, y);
+                if(clickedInput){
+                    clickedBox = *it;
+                    break;
+                }
+            }
+
+            focusInput(clickedInput, clickedBox);
+            if(clickedInput) return true;
+
             for(UIBox* box : boxes){
                 box->handleClick();
             }
         }
+
+        if(focusedInput){
+            const bool handled = focusedInput->handleEvent(event);
+            if(focusedInput && !focusedInput->isFocused()) focusInput(nullptr);
+            return handled;
+        }
+
+        return false;
     }
 
     void render(){
@@ -68,7 +118,7 @@ public:
 
         auto it = std::find(boxes.begin(), boxes.end(), box);
         if(it != boxes.end()){
-            (*it)->clean();
+            if(focusedBox == box) focusInput(nullptr);
             delete *it;
             boxes.erase(it);
         }
@@ -79,8 +129,9 @@ public:
     }
 
     void clean(){
+        focusInput(nullptr);
         for(UIBox* box : boxes){
-            box->clean();
+            delete box;
         }
         boxes.clear();
     }

@@ -15,13 +15,25 @@ public:
 
         Font titleFont("assets/fonts/Lato-Bold.ttf", 64);
         Font buttonFont("assets/fonts/Lato-Bold.ttf", 32);
+        Font inputFont("assets/fonts/Lato-Regular.ttf", 24);
         uiLayer->getBoxByIndex(0)->addLabel(titleFont,"Super Game !",{0,0,0,40},{-1,-1,512,96});
 
-        Button* btn1 = new Button(buttonFont, "Start", {60,120,220,255}, {-1,50,200,64}, 1.05f,
+        Input* loginInput = uiLayer->getBoxByIndex(1)->addInput(
+            inputFont, u8"Login...", {-1,24,320,48});
+        loginInput->onSubmit = [](const std::string& name){
+            std::cout << "Login: " << name << '\n';
+        };
+        Input* passwordInput = uiLayer->getBoxByIndex(1)->addInput(
+                inputFont, u8"Password...", {-1,24*2+48,320,48});
+        passwordInput->onSubmit = [](const std::string& name){
+            std::cout << "Password: " << name << '\n';
+        };
+
+        Button* btn1 = new Button(buttonFont, "Start", {60,120,220,255}, {88,192,200,64}, 1.05f,
                                   [&app](){App::sceneManager->changeScene(createScene2, app);});
-        Button* btn2 = new Button(buttonFont, "Settings", {220,120,60,255}, {-1,64+50*2,200,64}, 1.05f,
+        Button* btn2 = new Button(buttonFont, "Settings", {220,120,60,255}, {312,192,200,64}, 1.05f,
                                   [](){std::cout<<"Settings\n";});
-        Button* btn3 = new Button(buttonFont, "Exit", {120,60,220,255}, {-1,64*2+50*3,200,64}, 1.05f,
+        Button* btn3 = new Button(buttonFont, "Exit", {120,60,220,255}, {-1,288,200,64}, 1.05f,
                                   [&app](){app.isRunning = false;});
         uiLayer->getBoxByIndex(1)->addButton(btn1);
         uiLayer->getBoxByIndex(1)->addButton(btn2);
@@ -35,10 +47,11 @@ public:
 
     void onExit(App& app) override {
         delete uiLayer;
+        uiLayer = nullptr;
     }
 
     void handleEvents(App& app, SDL_Event &event) override {
-        UIScene::handleEvents(app, event);
+        if(handleUIEvents(event)) return;
         if (event.type == SDL_KEYDOWN) {
 
             if (event.key.keysym.sym == SDLK_SPACE) {

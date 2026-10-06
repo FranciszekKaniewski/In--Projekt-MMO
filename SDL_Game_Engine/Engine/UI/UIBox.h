@@ -8,6 +8,7 @@
 #include "../Core/App.h"
 #include "./Label.h"
 #include "./Button.h"
+#include "./Input.h"
 
 class UIBox{
 private:
@@ -22,6 +23,13 @@ private:
 public:
     UIBox(std::string name, SDL_Rect rect, SDL_Color bgColor = {255,255,255,255}, int cornerRadius = 0, bool isClosed = false) :
     name(name), rect(rect), bgColor(bgColor), isClosed(isClosed), cornerRadius(cornerRadius) {};
+
+    UIBox(const UIBox&) = delete;
+    UIBox& operator=(const UIBox&) = delete;
+
+    ~UIBox() {
+        clean();
+    }
 
     void setCornerRadius(int radius) {
         cornerRadius = radius > 0 ? radius : 0;
@@ -50,8 +58,22 @@ public:
         for(UIElement* e : elements) e->handleClick();
     }
 
+    Input* getInputAtPoint(int x, int y) const {
+        if(isClosed) return nullptr;
+
+        for(auto it = elements.rbegin(); it != elements.rend(); ++it){
+            Input* input = dynamic_cast<Input*>(*it);
+            if(input && input->containsPoint(x, y)) return input;
+        }
+
+        return nullptr;
+    }
+
     void clean(){
-        for(UIElement* e : elements) e->clean();
+        for(UIElement* e : elements){
+            e->clean();
+            delete e;
+        }
         elements.clear();
     }
 
@@ -92,5 +114,26 @@ public:
 
         elements.push_back(btn);
         return btn;
+    }
+
+    Input* addInput(Font font, const std::string& placeholder = "",
+                    SDL_Rect rect = {0,0,280,48}) {
+        return addInput(new Input(std::move(font), placeholder, rect));
+    }
+
+    Input* addInput(Input* input) {
+        if(!input) return nullptr;
+
+        SDL_Rect windowedRect = input->rect;
+        if(windowedRect.x == -1)
+            windowedRect.x = this->rect.w/2 - windowedRect.w/2;
+        if(windowedRect.y == -1)
+            windowedRect.y = this->rect.h/2 - windowedRect.h/2;
+
+        input->changeRect(this->rect.x + windowedRect.x,
+                          this->rect.y + windowedRect.y,
+                          windowedRect.w, windowedRect.h);
+        elements.push_back(input);
+        return input;
     }
 };
