@@ -97,9 +97,7 @@ void App::handleEvents() {
             default: ;
         }
 
-        if (sceneManager->activeScene) {
-            sceneManager->activeScene->handleEvents(*this, event);
-        }
+        sceneManager->handleEvents(*this, event);
     }
 }
 

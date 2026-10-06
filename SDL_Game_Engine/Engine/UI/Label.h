@@ -25,10 +25,10 @@ public:
     }
 
     void draw() override {
-        SDL_Rect bgRect = {rect.x, rect.y, rect.w + margin, rect.h + margin};
+        SDL_Rect bgRect = {rect.x-margin/2, rect.y-margin/2, rect.w + margin, rect.h + margin};
         TextureManager::DrawRectangle(bgRect,bgColor,bgCornerRadius);
 
-        SDL_Rect textRect = {rect.x+margin/2, rect.y+margin/2,rect.w, rect.h};
+        SDL_Rect textRect = {rect.x, rect.y,rect.w, rect.h};
         SDL_RenderCopy(App::renderer, texture, nullptr, &textRect);
     }
 

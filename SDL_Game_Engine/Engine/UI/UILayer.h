@@ -16,11 +16,21 @@ public:
         int x, y;
         SDL_GetMouseState(&x, &y);
 
+        if (app.event.type == SDL_MOUSEMOTION) {
+            x = app.event.motion.x;
+            y = app.event.motion.y;
+        } else if (app.event.type == SDL_MOUSEBUTTONDOWN ||
+                   app.event.type == SDL_MOUSEBUTTONUP) {
+            x = app.event.button.x;
+            y = app.event.button.y;
+        }
+
         for(UIBox* box : boxes){
             box->updateMousePosClick(x,y);
         }
 
-        if (app.event.type == SDL_MOUSEBUTTONDOWN) {
+        if (app.event.type == SDL_MOUSEBUTTONDOWN &&
+            app.event.button.button == SDL_BUTTON_LEFT) {
             for(UIBox* box : boxes){
                 box->handleClick();
             }

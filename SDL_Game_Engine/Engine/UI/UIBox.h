@@ -1,10 +1,13 @@
 #pragma once
 #include "string"
 #include "vector"
+#include <functional>
+#include <utility>
 
 #include "../Vendor/SDL2/include/SDL2/SDL.h"
 #include "../Core/App.h"
 #include "./Label.h"
+#include "./Button.h"
 
 class UIBox{
 private:
@@ -43,6 +46,7 @@ public:
     }
 
     void handleClick(){
+        if(isClosed) return;
         for(UIElement* e : elements) e->handleClick();
     }
 
@@ -60,5 +64,33 @@ public:
 
         Label* label = new Label(font,text,color,windowedRect);
         elements.push_back(label);
+    }
+
+    Button* addButton(Font font, const std::string& text,
+                      SDL_Color color = {60,120,220,255}, SDL_Rect rect = {0,0,128,64},
+                      float hoverScale = 1.05f,
+                      std::function<void()> onClick = {}) {
+        if(rect.x == -1)
+            rect.x = this->rect.w/2 - rect.w/2;
+        if(rect.y == -1)
+            rect.y = this->rect.h/2 - rect.h/2;
+        SDL_Rect windowedRect = {rect.x+this->rect.x,rect.y+this->rect.y,rect.w,rect.h};
+
+        Button* button = new Button(font, text, color, windowedRect,
+                                    hoverScale, std::move(onClick));
+        elements.push_back(button);
+        return button;
+    }
+
+    Button* addButton(Button* btn) {
+        SDL_Rect windowedRect = btn->rect;
+        if(btn->rect.x == -1)
+            windowedRect.x = this->rect.w/2 - btn->rect.w/2;
+        if(btn->rect.y == -1)
+            windowedRect.y = this->rect.h/2 - btn->rect.h/2;
+        btn->changeRect(this->rect.x+windowedRect.x,this->rect.y+windowedRect.y,windowedRect.w,windowedRect.h);
+
+        elements.push_back(btn);
+        return btn;
     }
 };
