@@ -50,6 +50,7 @@ void App::init(const char* configPath) {
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
         if(renderer){
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             std::cout << "Renderer Created!" << std::endl;
         }
 

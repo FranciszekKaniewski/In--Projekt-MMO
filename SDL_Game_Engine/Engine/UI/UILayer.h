@@ -33,7 +33,7 @@ public:
         }
     }
 
-    UIBox* addBox(SDL_Rect rect, SDL_Color color={255,255,255,255}, std::string name="", bool isClosed=false){
+    UIBox* addBox(SDL_Rect rect, SDL_Color color={255,255,255,255},int cornerRadius=0, std::string name="", bool isClosed=false){
         int windowWith;
         int windowHeight;
 
@@ -48,7 +48,7 @@ public:
         name != "" ? finalName = name :
         finalName = "Box" + std::to_string(boxes.size());
 
-        UIBox* box = new UIBox(finalName, rect, color, isClosed);
+        UIBox* box = new UIBox(finalName, rect, color, cornerRadius, isClosed);
         boxes.push_back(box);
         return box;
     }
@@ -64,7 +64,7 @@ public:
         }
     }
 
-    UIBox* getWindowByIndex(int index){
+    UIBox* getBoxByIndex(int index){
         return boxes[index];
     }
 
