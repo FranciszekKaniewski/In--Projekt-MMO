@@ -60,22 +60,9 @@ public:
 
         SDL_SetTextureColorMod(texture, 255, 255, 255);
 
-        int textWidth, textHeight;
-        if (SDL_QueryTexture(texture, nullptr, nullptr, &textWidth, &textHeight) != 0 ||
-            textWidth <= 0 || textHeight <= 0) return;
-
         const int padding = static_cast<int>(std::lround(std::max(0, margin) * scale));
-        const int availableWidth = drawRect.w - padding;
-        const int availableHeight = drawRect.h - padding;
-        if (availableWidth <= 0 || availableHeight <= 0) return;
-
-        const float textScale = std::min(static_cast<float>(availableWidth) / textWidth,
-                                         static_cast<float>(availableHeight) / textHeight);
-        SDL_Rect textRect = {0, 0,
-            std::max(1, static_cast<int>(std::lround(textWidth * textScale))),
-            std::max(1, static_cast<int>(std::lround(textHeight * textScale)))};
-        textRect.x = drawRect.x + (drawRect.w - textRect.w) / 2;
-        textRect.y = drawRect.y + (drawRect.h - textRect.h) / 2;
-        SDL_RenderCopy(App::renderer, texture, nullptr, &textRect);
+        SDL_Rect textBounds = {drawRect.x + padding / 2, drawRect.y + padding / 2,
+                               drawRect.w - padding, drawRect.h - padding};
+        drawText(textBounds, scale);
     }
 };

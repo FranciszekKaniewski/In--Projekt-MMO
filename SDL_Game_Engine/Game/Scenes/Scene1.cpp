@@ -13,21 +13,21 @@ public:
         uiLayer->addBox({-1,-1,600,400});
         uiLayer->addBox({-1,app.getWindowSize().height-64-25,1000,64}, {180,180,180,255}, 24);
 
-        Font font = Font("assets/fonts/AllenSans-Bold.ttf", 2048);
-        uiLayer->getBoxByIndex(0)->addLabel(font,"Super Game !",{0,0,0,40},{-1,-1,512,96});
+        Font titleFont("assets/fonts/Lato-Bold.ttf", 64);
+        Font buttonFont("assets/fonts/Lato-Bold.ttf", 32);
+        uiLayer->getBoxByIndex(0)->addLabel(titleFont,"Super Game !",{0,0,0,40},{-1,-1,512,96});
 
-        Button* btn1 = new Button(font, "Start", {60,120,220,255}, {-1,50,200,64}, 1.05f,
+        Button* btn1 = new Button(buttonFont, "Start", {60,120,220,255}, {-1,50,200,64}, 1.05f,
                                   [&app](){App::sceneManager->changeScene(createScene2, app);});
-        Button* btn2 = new Button(font, "Settings", {220,120,60,255}, {-1,64+50*2,200,64}, 1.05f,
+        Button* btn2 = new Button(buttonFont, "Settings", {220,120,60,255}, {-1,64+50*2,200,64}, 1.05f,
                                   [](){std::cout<<"Settings\n";});
-        Button* btn3 = new Button(font, "Exit", {120,60,220,255}, {-1,64*2+50*3,200,64}, 1.05f,
+        Button* btn3 = new Button(buttonFont, "Exit", {120,60,220,255}, {-1,64*2+50*3,200,64}, 1.05f,
                                   [&app](){app.isRunning = false;});
         uiLayer->getBoxByIndex(1)->addButton(btn1);
         uiLayer->getBoxByIndex(1)->addButton(btn2);
         uiLayer->getBoxByIndex(1)->addButton(btn3);
 
-        Font font1 = Font("assets/fonts/AllenSans-Regular.ttf", 2048);
-        font1.changeSize(128);
+        Font font1("assets/fonts/Lato-Regular.ttf", 20);
         uiLayer->getBoxByIndex(2)->addLabel(font1,"Franciszek Kaniewski",{0,0,0,40},{500-256-192 - (500-256-192)/2,-1,192,32});
         uiLayer->getBoxByIndex(2)->addLabel(font1,"Uniwersytet Mikołaja Kopernika w Toruniu",{0,0,0,40},{-1,-1,512,32});
         uiLayer->getBoxByIndex(2)->addLabel(font1,"2026/2027",{0,0,0,40},{500+256+128 + (500-256-128)/2 - 128,-1,128,32});

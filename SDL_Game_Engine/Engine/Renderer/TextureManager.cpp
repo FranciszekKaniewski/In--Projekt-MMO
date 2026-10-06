@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 #include "../Vendor/SDL2/include/SDL2/SDL_image.h"
 
@@ -17,10 +18,26 @@ SDL_Texture* TextureManager::LoadTexture(const char *fileName) {
 }
 
 SDL_Texture* TextureManager::LoadTextTexture(Font font, const std::string& label) {
+    if (label.empty()) return nullptr;
+    if (!font.font || !App::renderer) {
+        std::cerr << "Cannot render text without a valid font and renderer." << std::endl;
+        return nullptr;
+    }
 
-    SDL_Surface* tempSurface = TTF_RenderText_Solid(font.font, label.c_str(), font.color);
+    SDL_Surface* tempSurface = TTF_RenderUTF8_Blended(font.font, label.c_str(), font.color);
+    if (!tempSurface) {
+        std::cerr << "Failed to render text: " << TTF_GetError() << std::endl;
+        return nullptr;
+    }
     SDL_Texture* tex = SDL_CreateTextureFromSurface(App::renderer,tempSurface);
     SDL_FreeSurface(tempSurface);
+
+    if (!tex) {
+        std::cerr << "Failed to create text texture: " << SDL_GetError() << std::endl;
+        return nullptr;
+    }
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(tex, SDL_ScaleModeLinear);
 
     return tex;
 }
