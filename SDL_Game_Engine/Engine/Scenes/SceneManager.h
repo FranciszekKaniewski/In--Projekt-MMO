@@ -5,6 +5,11 @@
 
 class SceneManager {
 public:
+    SceneManager() = default;
+    ~SceneManager() { delete activeScene; }
+    SceneManager(const SceneManager&) = delete;
+    SceneManager& operator=(const SceneManager&) = delete;
+
     Scene* activeScene = nullptr;
 
     void changeScene(std::function<Scene*()> factory, App& app);

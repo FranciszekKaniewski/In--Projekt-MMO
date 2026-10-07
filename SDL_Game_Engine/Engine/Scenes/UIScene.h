@@ -21,7 +21,9 @@ public:
     UIScene(SDL_Color color = {200,200,200}, const std::string& backgroundImage = "") : color(color) {
         if (!backgroundImage.empty()) setBackgroundImage(backgroundImage);
     };
-    virtual ~UIScene() = default;
+    ~UIScene() override {
+        delete uiLayer;
+    }
 
     bool setBackgroundImage(const std::string& fileName) {
         return background.setImage(fileName.c_str());
@@ -56,7 +58,10 @@ public:
     }
 
     void onEnter(App& app) override {}
-    void onExit(App& app) override {}
+    void onExit(App& app) override {
+        delete uiLayer;
+        uiLayer = nullptr;
+    }
 
 protected:
     bool handleUIEvents(const SDL_Event& event) {

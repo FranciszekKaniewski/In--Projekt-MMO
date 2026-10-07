@@ -1,4 +1,5 @@
 #include "SceneManager.h"
+#include <memory>
 #include <utility>
 
 void SceneManager::changeScene(std::function<Scene*()> factory, App& app) {
@@ -19,11 +20,10 @@ void SceneManager::changeScene(std::function<Scene*()> factory, App& app) {
 }
 
 void SceneManager::closeScene(App& app) {
-    if (activeScene != nullptr) {
-        activeScene->onExit(app);
-        delete activeScene;
-        activeScene = nullptr;
-    }
+    pendingSceneFactory = {};
+    hasPendingSceneChange = false;
+    std::unique_ptr<Scene> scene(std::exchange(activeScene, nullptr));
+    if(scene) scene->onExit(app);
 }
 
 void SceneManager::handleEvents(App& app, SDL_Event& event) {

@@ -26,8 +26,10 @@ struct WindowResolution {
 
 class App {
 public:
-    App() {};
-    ~App() {};
+    App() = default;
+    ~App();
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
 
     std::string title;
     static float deltaTime;
@@ -42,7 +44,7 @@ public:
     static SceneManager* sceneManager;
 
     WindowSize getWindowSize() const {
-        int w,h;
+        int w = 0, h = 0;
         SDL_GetWindowSize(this->window,&w, &h);
         return {w,h};
     };
@@ -67,4 +69,9 @@ public:
     bool setResolution(int width, int height);
     std::vector<WindowResolution> getAvailableResolutions() const;
 private:
+    bool sdlInitialized = false;
+    bool ttfInitialized = false;
+    bool imageInitialized = false;
+    bool mixerInitialized = false;
+    bool audioOpened = false;
 };

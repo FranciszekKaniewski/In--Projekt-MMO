@@ -7,6 +7,7 @@
 
 #include "iostream"
 #include <algorithm>
+#include <cstring>
 
 #include "./Config.h"
 #include "../Scenes/SceneManager.h"
@@ -15,9 +16,14 @@
 SDL_Renderer* App::renderer = nullptr;
 SDL_Event App::event;
 float App::deltaTime = 0.0f;
-SceneManager* App::sceneManager = new SceneManager();
+SceneManager* App::sceneManager = nullptr;
+
+App::~App() {
+    clean();
+}
 
 void App::init(const char* configPath) {
+    clean();
     AppConfig cfg;
 
     try {
@@ -42,50 +48,80 @@ void App::init(const char* configPath) {
     int xpos = SDL_WINDOWPOS_CENTERED;
     int ypos = SDL_WINDOWPOS_CENTERED;
 
-    SDL_setenv("SDL_AUDIODRIVER", "directsound", 1);
+    SDL_setenv("SDL_AUDIODRIVER", "directsound", 0);
 
-    if(SDL_Init(SDL_INIT_EVERYTHING) == 0){
-        std::cout << "SDL works!" << std::endl;
-
-        window = SDL_CreateWindow(cfg.window.title.c_str(), xpos, ypos, cfg.window.width, cfg.window.height, flags);
-        if(window){
-            std::cout << "Window Created!" << std::endl;
-        }
-
-        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
-        if(renderer){
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            std::cout << "Renderer Created!" << std::endl;
-        }
-        syncDisplaySettings();
-
-        if (TTF_Init() == -1) {
-            std::cerr << "TTF_Init error: " << TTF_GetError() << std::endl;
-            return;
-        }
-        std::cout << "TFF Initialized!" << std::endl;
-
-        if (Mix_Init(MIX_INIT_MP3) == 0) {
-            std::cerr << "Mix_Init Error: " << Mix_GetError() << std::endl;
-            return;
-        }
-        if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096) < 0) {
-            std::cerr << "Mix_OpenAudio Error: " << Mix_GetError() << std::endl;
-            return;
-        }
-        std::cout << "Audio Initialized!" << std::endl;
-        applyAudioSettings();
-
-        isRunning = true;
-        sceneManager->changeScene(createScene1, *this);
-    } else {
-        isRunning = false;
+    // SDL_Init can fail after initializing some subsystems.
+    sdlInitialized = true;
+    if(SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+        std::cerr << "SDL_Init error: " << SDL_GetError() << std::endl;
+        clean();
+        return;
     }
+    std::cout << "SDL works!" << std::endl;
+
+    window = SDL_CreateWindow(cfg.window.title.c_str(), xpos, ypos, cfg.window.width, cfg.window.height, flags);
+    if(!window) {
+        std::cerr << "SDL_CreateWindow error: " << SDL_GetError() << std::endl;
+        clean();
+        return;
+    }
+    std::cout << "Window Created!" << std::endl;
+
+    const char* videoDriver = SDL_GetCurrentVideoDriver();
+    const bool headless = videoDriver &&
+        (std::strcmp(videoDriver, "dummy") == 0 || std::strcmp(videoDriver, "offscreen") == 0);
+    // Headless windows cannot use Direct3D; avoid failed hardware initialization.
+    renderer = SDL_CreateRenderer(window, -1,
+        headless ? SDL_RENDERER_SOFTWARE : SDL_RENDERER_PRESENTVSYNC);
+    if(!renderer) {
+        std::cerr << "SDL_CreateRenderer error: " << SDL_GetError() << std::endl;
+        clean();
+        return;
+    }
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    std::cout << "Renderer Created!" << std::endl;
+    syncDisplaySettings();
+
+    if(TTF_Init() == -1) {
+        std::cerr << "TTF_Init error: " << TTF_GetError() << std::endl;
+        clean();
+        return;
+    }
+    ttfInitialized = true;
+    std::cout << "TTF Initialized!" << std::endl;
+
+    imageInitialized = true;
+    if((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
+        std::cerr << "IMG_Init error: " << IMG_GetError() << std::endl;
+        clean();
+        return;
+    }
+
+    mixerInitialized = true;
+    // Open the device first: Mix_CloseAudio then frees codec decoder lists
+    // even if the subsequent codec initialization fails.
+    if(Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096) < 0) {
+        std::cerr << "Mix_OpenAudio error: " << Mix_GetError() << std::endl;
+        clean();
+        return;
+    }
+    audioOpened = true;
+    if((Mix_Init(MIX_INIT_MP3) & MIX_INIT_MP3) == 0) {
+        std::cerr << "Mix_Init error: " << Mix_GetError() << std::endl;
+        clean();
+        return;
+    }
+    std::cout << "Audio Initialized!" << std::endl;
+    applyAudioSettings();
+
+    sceneManager = new SceneManager();
+    isRunning = true;
+    sceneManager->changeScene(createScene1, *this);
 }
 
 void App::update() {
-    if (sceneManager->activeScene) {
+    if (sceneManager && sceneManager->activeScene) {
         sceneManager->activeScene->update(*this);
     }
 }
@@ -257,12 +293,13 @@ void App::handleEvents() {
             default: ;
         }
 
-        sceneManager->handleEvents(*this, event);
+        if(sceneManager) sceneManager->handleEvents(*this, event);
     }
 }
 
 void App::render() {
-    if (sceneManager->activeScene) {
+    if(!renderer) return;
+    if (sceneManager && sceneManager->activeScene) {
         sceneManager->activeScene->render(*this);
     } else {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -273,11 +310,35 @@ void App::render() {
 }
 
 void App::clean() {
-    sceneManager->closeScene(*this);
-    delete sceneManager;
+    const bool hadResources = sceneManager || renderer || window || sdlInitialized ||
+        ttfInitialized || imageInitialized || mixerInitialized || audioOpened;
+    isRunning = false;
 
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    std::cout << "Game closed!" << std::endl;
+    // Scene destructors release textures and fonts while SDL and TTF are alive.
+    if(sceneManager) {
+        sceneManager->closeScene(*this);
+        delete sceneManager;
+        sceneManager = nullptr;
+    }
+    if(renderer) SDL_DestroyRenderer(renderer);
+    renderer = nullptr;
+    if(window) SDL_DestroyWindow(window);
+    window = nullptr;
+
+    if(audioOpened) Mix_CloseAudio();
+    audioOpened = false;
+    if(mixerInitialized) Mix_Quit();
+    mixerInitialized = false;
+    if(imageInitialized) IMG_Quit();
+    imageInitialized = false;
+    if(ttfInitialized) TTF_Quit();
+    ttfInitialized = false;
+    if(sdlInitialized) {
+        SDL_Quit();
+        // Failed initialization can leave this thread's SDL error storage alive.
+        SDL_TLSCleanup();
+    }
+    sdlInitialized = false;
+
+    if(hadResources) std::cout << "Game closed!" << std::endl;
 }
