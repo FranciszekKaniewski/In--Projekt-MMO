@@ -101,7 +101,7 @@ void App::init(const char* configPath) {
     mixerInitialized = true;
     // Open the device first: Mix_CloseAudio then frees codec decoder lists
     // even if the subsequent codec initialization fails.
-    if(Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 1024) < 0) {
+    if(Mix_OpenAudio(48000, MIX_DEFAULT_FORMAT, 2, 1024) < 0) {
         std::cerr << "Mix_OpenAudio error: " << Mix_GetError() << std::endl;
         clean();
         return;
