@@ -14,6 +14,8 @@ public:
     SDL_Texture* texture = nullptr;
     int margin = 15;
     int bgCornerRadius = 15;
+    enum class Alignment { Left, Center, Right };
+    Alignment alignment = Alignment::Center;
 
     Label(Font font,const std::string& text,SDL_Color bgColor={0,0,0,0}, SDL_Rect rect={0,0,0,0}) :
         UIElement(rect), text(text), font(font),bgColor(bgColor) {
@@ -54,6 +56,8 @@ protected:
             std::max(1, static_cast<int>(std::lround(textWidth * scale))),
             std::max(1, static_cast<int>(std::lround(textHeight * scale)))};
         textRect.x = bounds.x + (bounds.w - textRect.w) / 2;
+        if(alignment == Alignment::Left) textRect.x = bounds.x;
+        else if(alignment == Alignment::Right) textRect.x = bounds.x + bounds.w - textRect.w;
         textRect.y = bounds.y + (bounds.h - textRect.h) / 2;
         SDL_RenderCopy(App::renderer, texture, nullptr, &textRect);
     }

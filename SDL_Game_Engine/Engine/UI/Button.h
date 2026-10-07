@@ -31,6 +31,10 @@ public:
         isHovered = hover;
     }
 
+    bool isInteractive() const override {
+        return true;
+    }
+
     void handleClick() override {
         if (!isHovered || !onClick) return;
 

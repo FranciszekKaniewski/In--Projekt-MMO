@@ -11,7 +11,7 @@ public:
         uiLayer = new UILayer(app);
         uiLayer->addBox({-1,25,600,128}, {200,200,200,255}, 24);
         uiLayer->addBox({-1,-1,600,400});
-        uiLayer->addBox({-1,app.getWindowSize().height-64-25,1000,64}, {180,180,180,255}, 24);
+        uiLayer->addBox({-1,app.getUISize().height-64-25,1000,64}, {180,180,180,255}, 24);
 
         Font titleFont("assets/fonts/Lato-Bold.ttf", 64);
         Font buttonFont("assets/fonts/Lato-Bold.ttf", 32);
@@ -32,7 +32,7 @@ public:
         Button* btn1 = new Button(buttonFont, "Start", {60,120,220,255}, {88,192,200,64}, 1.05f,
                                   [&app](){App::sceneManager->changeScene(createScene2, app);});
         Button* btn2 = new Button(buttonFont, "Settings", {220,120,60,255}, {312,192,200,64}, 1.05f,
-                                  [](){std::cout<<"Settings\n";});
+                                  [&app](){App::sceneManager->changeScene(createSettingsScene, app);});
         Button* btn3 = new Button(buttonFont, "Exit", {120,60,220,255}, {-1,288,200,64}, 1.05f,
                                   [&app](){app.isRunning = false;});
         uiLayer->getBoxByIndex(1)->addButton(btn1);

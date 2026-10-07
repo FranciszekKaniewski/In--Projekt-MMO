@@ -142,16 +142,20 @@ public:
         textChanged();
     }
 
-    bool containsPoint(int x, int y) const {
+    bool containsPoint(int x, int y) const override {
         SDL_Point point = {x, y};
         return SDL_PointInRect(&point, &rect) == SDL_TRUE;
     }
 
-    bool isFocused() const {
+    bool isFocusable() const override {
+        return true;
+    }
+
+    bool isFocused() const override {
         return focused;
     }
 
-    void setFocused(bool value) {
+    void setFocused(bool value) override {
         if (focused == value) return;
 
         focused = value;
@@ -167,7 +171,7 @@ public:
         }
     }
 
-    bool handleEvent(const SDL_Event& event) {
+    bool handleEvent(const SDL_Event& event) override {
         if (event.type == SDL_WINDOWEVENT &&
             event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
             setFocused(false);
