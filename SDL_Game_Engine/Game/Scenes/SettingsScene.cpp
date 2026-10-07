@@ -87,7 +87,7 @@ public:
             });
 
         panel->addButton(buttonFont, u8"Back", {0,0,0,0}, {-1,516,200,56}, 1.05f,
-            [&app]() { App::sceneManager->changeScene(createScene1, app); }, "assets/UI/btn.png");
+            [&app]() { app.audio.playSound("button.click"); App::sceneManager->changeScene(createScene1, app); }, "assets/UI/btn.png");
     }
 
     void handleEvents(App& app, SDL_Event& event) override {

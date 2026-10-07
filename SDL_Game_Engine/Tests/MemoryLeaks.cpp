@@ -134,6 +134,95 @@ static void exerciseScenes(App& app) {
     emptyScene(app);
 }
 
+static constexpr const char* menuMusicPath =
+    "Assets/Audio/Music/runic_sanctuary_hopeful_loop.ogg";
+
+static void writeAudioFixture() {
+    // One second of mono PCM silence at 22050 Hz, with a WAV header.
+    static const unsigned char wav[44 + 44100] = {
+        'R','I','F','F', 0x68,0xac,0,0, 'W','A','V','E',
+        'f','m','t',' ', 16,0,0,0, 1,0, 1,0,
+        0x22,0x56,0,0, 0x44,0xac,0,0, 2,0, 16,0,
+        'd','a','t','a', 0x44,0xac,0,0
+    };
+    std::FILE* file = std::fopen("audio-fixture.wav", "wb");
+    require(file != nullptr, "Cannot create WAV fixture");
+    const bool written = std::fwrite(wav, 1, sizeof(wav), file) == sizeof(wav);
+    const int closed = std::fclose(file);
+    require(written && closed == 0, "Cannot write WAV fixture");
+}
+
+static void exerciseAudio(App& app) {
+    require(app.audio.playSound("missing") == -1, "Unknown sound must fail safely");
+    require(!app.audio.playMusic("missing"), "Unknown music must fail safely");
+    require(!app.audio.loadSound("", "audio-fixture.wav"), "Empty audio ID must fail");
+    require(!app.audio.loadMusic("menu", ""), "Empty audio path must fail");
+    require(!app.audio.loadSound("effect", "does-not-exist.wav"), "Missing WAV must fail");
+    require(!app.audio.loadMusic("menu", "does-not-exist.ogg"), "Missing OGG must fail");
+    // A failed load must leave the ID available for a successful retry.
+    require(app.audio.loadSound("effect", "audio-fixture.wav"), "WAV retry failed");
+    require(app.audio.loadMusic("menu", menuMusicPath), "OGG retry failed");
+    require(app.audio.loadSound("effect", "does-not-exist.wav"), "Sound ID was not cached");
+    require(app.audio.loadMusic("menu", "does-not-exist.ogg"), "Music ID was not cached");
+
+    require(app.audio.playMusic("menu", true), "OGG playback failed");
+    require(Mix_PlayingMusic() == 1, "Music is not playing");
+    app.audio.pauseMusic();
+    require(Mix_PausedMusic() == 1, "Music pause failed");
+    app.audio.resumeMusic();
+    require(Mix_PausedMusic() == 0, "Music resume failed");
+    App::sceneManager->changeScene(createSettingsScene, app);
+    require(Mix_PlayingMusic() == 1, "Scene transition stopped music");
+
+    app.settings.volume = 37;
+    app.settings.muted = false;
+    app.applyAudioSettings();
+    const int expectedVolume = 37 * MIX_MAX_VOLUME / 100;
+    const int first = app.audio.playSound("effect", -1);
+    require(first >= 0, "WAV playback failed");
+    require(Mix_Volume(first, -1) == expectedVolume &&
+            Mix_VolumeMusic(-1) == expectedVolume,
+            "Playback changed the configured volume");
+
+    app.settings.muted = true;
+    app.applyAudioSettings();
+    const int second = app.audio.playSound("effect", -1);
+    require(second >= 0 && second != first, "Concurrent sound playback failed");
+    require(Mix_Volume(first, -1) == 0 && Mix_Volume(second, -1) == 0 &&
+            Mix_VolumeMusic(-1) == 0, "Playback bypassed mute");
+    app.settings.muted = false;
+    app.applyAudioSettings();
+    require(Mix_Volume(first, -1) == expectedVolume &&
+            Mix_Volume(second, -1) == expectedVolume &&
+            Mix_VolumeMusic(-1) == expectedVolume, "Unmute lost the previous volume");
+
+    const int channelCount = Mix_AllocateChannels(-1);
+    for(int i = 2; i < channelCount; ++i) {
+        require(app.audio.playSound("effect", -1) >= 0, "Cannot fill mixer channels");
+    }
+    require(app.audio.playSound("effect") == -1, "Channel exhaustion must report failure");
+    require(Mix_Playing(-1) == channelCount, "Channel exhaustion interrupted a sound");
+
+    app.audio.stopMusic();
+    require(Mix_PlayingMusic() == 0, "Music stop failed");
+    require(app.audio.playMusic("menu", true), "Music restart failed");
+    app.audio.clear();
+    app.audio.clear();
+    require(Mix_PlayingMusic() == 0 && Mix_Playing(-1) == 0, "Audio clear left playback active");
+    require(!app.audio.playMusic("menu") && app.audio.playSound("effect") == -1,
+            "Audio clear retained resource IDs");
+    app.settings.volume = 100;
+    app.applyAudioSettings();
+}
+
+static void startAudioForCleanup(App& app) {
+    require(app.audio.loadMusic("cleanup.music", menuMusicPath) &&
+            app.audio.playMusic("cleanup.music", true), "Cannot prepare music for cleanup");
+    require(app.audio.loadSound("cleanup.sound", "audio-fixture.wav") &&
+            app.audio.playSound("cleanup.sound", -1) >= 0,
+            "Cannot prepare sound for cleanup");
+}
+
 // Uses the base UIScene destructor, without a custom onExit implementation.
 static void exerciseUIOwnership(App& app) {
     SceneManager manager;
@@ -165,6 +254,7 @@ int main() {
         SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
         SDL_setenv("SDL_RENDER_DRIVER", "", 1);
         std::cout << "Memory regression check\n";
+        writeAudioFixture();
         // Warm up runtime/library caches before recording the shutdown baseline.
         {
             App warmup;
@@ -176,6 +266,8 @@ int main() {
                     "Headless initialization must choose a software renderer");
             exerciseScenes(warmup);
             exerciseUIOwnership(warmup);
+            exerciseAudio(warmup);
+            startAudioForCleanup(warmup);
             warmup.clean();
             requireClosed(warmup);
         }
@@ -186,6 +278,7 @@ int main() {
             require(app.isRunning, "App initialization failed");
             exerciseScenes(app);
             exerciseUIOwnership(app);
+            exerciseAudio(app);
             emptyScene(app);
             const Allocations sceneBaseline;
             for(int i = 0; i < 100; ++i) {
@@ -194,8 +287,11 @@ int main() {
             }
             exerciseUIOwnership(app);
             sceneBaseline.check("UI, texture and font ownership");
+            startAudioForCleanup(app);
             app.clean();
             requireClosed(app);
+            require(!app.audio.loadMusic("closed", menuMusicPath),
+                    "Audio loading must fail after cleanup");
             app.clean();
             requireClosed(app);
             app.update();
@@ -206,8 +302,13 @@ int main() {
             App app;
             app.init("Config/settings.json");
             require(app.isRunning, "Reinitialization failed");
+            startAudioForCleanup(app);
             app.init("Config/settings.json");
             require(app.isRunning, "Repeated initialization failed");
+            require(!app.audio.playMusic("cleanup.music") &&
+                    app.audio.playSound("cleanup.sound") == -1,
+                    "Repeated initialization retained old audio resources");
+            startAudioForCleanup(app);
             // No explicit clean: App's destructor must release everything.
         }
         shutdownBaseline.check("App destructor and repeated initialization");
@@ -234,6 +335,7 @@ int main() {
             shutdownBaseline.check("Injected initialization failure");
         }
         std::printf("PASS: 300 scene transitions, UI/text/PNG/font updates, repeated init, "
+                    "WAV/OGG playback, pause/resume, volume/mute, exhausted channels, "
                     "cleanup, destructors and 7 startup failure paths; "
                     "SDL=%d, C++=%lld (unchanged baseline).\n",
                     shutdownBaseline.sdl, shutdownBaseline.cpp);

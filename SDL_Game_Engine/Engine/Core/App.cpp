@@ -101,13 +101,14 @@ void App::init(const char* configPath) {
     mixerInitialized = true;
     // Open the device first: Mix_CloseAudio then frees codec decoder lists
     // even if the subsequent codec initialization fails.
-    if(Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096) < 0) {
+    if(Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 1024) < 0) {
         std::cerr << "Mix_OpenAudio error: " << Mix_GetError() << std::endl;
         clean();
         return;
     }
     audioOpened = true;
-    if((Mix_Init(MIX_INIT_MP3) & MIX_INIT_MP3) == 0) {
+    const int requiredCodecs = MIX_INIT_OGG;
+    if((Mix_Init(requiredCodecs) & requiredCodecs) != requiredCodecs) {
         std::cerr << "Mix_Init error: " << Mix_GetError() << std::endl;
         clean();
         return;
@@ -320,6 +321,7 @@ void App::clean() {
         delete sceneManager;
         sceneManager = nullptr;
     }
+    audio.clear();
     if(renderer) SDL_DestroyRenderer(renderer);
     renderer = nullptr;
     if(window) SDL_DestroyWindow(window);

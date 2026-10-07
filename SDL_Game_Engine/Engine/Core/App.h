@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include "../Vendor/SDL2/include/SDL2/SDL.h"
+#include "../Audio/AudioManager.h"
 
 class SceneManager;
 
@@ -36,6 +37,7 @@ public:
     bool isRunning = false;
     bool devMode = false;
     GameSettings settings;
+    AudioManager audio;
 
     SDL_Window *window = nullptr;
     static SDL_Renderer *renderer;
@@ -55,8 +57,6 @@ public:
         if(width > 0 && height > 0) return {width, height};
         return getWindowSize();
     }
-
-//    static Audio audio;
 
     void init(const char* configPath);
     void update();

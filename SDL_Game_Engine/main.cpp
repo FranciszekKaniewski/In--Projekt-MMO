@@ -8,6 +8,15 @@ int main(int argv, char** args) {
 
     App app;
     app.init("Config/settings.json");
+    if (!app.isRunning) return 1;
+
+    if (app.audio.loadMusic("menu", "Assets/Audio/Music/runic_sanctuary_hopeful_loop.ogg")) {
+        app.audio.playMusic("menu", true);
+    }
+    app.audio.loadSound(
+            "button.click",
+            "Assets/Audio/Sounds/rune_button_click.wav"
+    );
 
     const double timerFrequency = static_cast<double>(SDL_GetPerformanceFrequency());
 

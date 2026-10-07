@@ -30,11 +30,11 @@ public:
         };
 
         Button* btn1 = new Button(buttonFont, "Start", {0,0,0,0}, {88,192,200,64}, 1.05f,
-                                  [&app](){App::sceneManager->changeScene(createScene2, app);}, "assets/UI/btn.png");
+                                  [&app](){app.audio.playSound("button.click"); App::sceneManager->changeScene(createScene2, app);}, "assets/UI/btn.png");
         Button* btn2 = new Button(buttonFont, "Settings", {0,0,0,0}, {312,192,200,64}, 1.05f,
-                                  [&app](){App::sceneManager->changeScene(createSettingsScene, app);}, "assets/UI/btn.png");
+                                  [&app](){app.audio.playSound("button.click"); App::sceneManager->changeScene(createSettingsScene, app);}, "assets/UI/btn.png");
         Button* btn3 = new Button(buttonFont, "Exit", {0,0,0,0}, {-1,288,200,64}, 1.05f,
-                                  [&app](){app.isRunning = false;}, "assets/UI/btn.png");
+                                  [&app](){app.audio.playSound("button.click"); app.isRunning = false;}, "assets/UI/btn.png");
         uiLayer->getBoxByIndex(1)->addButton(btn1);
         uiLayer->getBoxByIndex(1)->addButton(btn2);
         uiLayer->getBoxByIndex(1)->addButton(btn3);
