@@ -7,6 +7,7 @@
 #include "../Vendor/SDL2/include/SDL2/SDL.h"
 #include "../Core/App.h"
 #include "./Label.h"
+#include "./UIBackground.h"
 #include "./Button.h"
 #include "./Input.h"
 #include "./Slider.h"
@@ -20,12 +21,16 @@ private:
     SDL_Color bgColor;
     bool isClosed;
     int cornerRadius;
+    UIBackground background;
 
     std::vector<UIElement*> elements;
 
 public:
-    UIBox(std::string name, SDL_Rect rect, SDL_Color bgColor = {255,255,255,255}, int cornerRadius = 0, bool isClosed = false) :
-    name(name), rect(rect), bgColor(bgColor), isClosed(isClosed), cornerRadius(cornerRadius) {};
+    UIBox(std::string name, SDL_Rect rect, SDL_Color bgColor = {255,255,255,255}, int cornerRadius = 0,
+          bool isClosed = false, const std::string& backgroundImage = "") :
+    name(name), rect(rect), bgColor(bgColor), isClosed(isClosed), cornerRadius(cornerRadius) {
+        if (!backgroundImage.empty()) setBackgroundImage(backgroundImage);
+    };
 
     UIBox(const UIBox&) = delete;
     UIBox& operator=(const UIBox&) = delete;
@@ -38,8 +43,20 @@ public:
         cornerRadius = radius > 0 ? radius : 0;
     }
 
+    bool setBackgroundImage(const std::string& fileName) {
+        return background.setImage(fileName.c_str());
+    }
+
+    void clearBackgroundImage() {
+        background.clearImage();
+    }
+
+    void setBackgroundOpacity(Uint8 alpha) {
+        background.setOpacity(alpha);
+    }
+
     void draw() {
-        TextureManager::DrawRectangle(rect, bgColor, cornerRadius);
+        background.draw(rect, bgColor, cornerRadius);
         for(UIElement* e : elements) e->draw();
     }
 
@@ -95,16 +112,18 @@ public:
             delete e;
         }
         elements.clear();
+        background.clearImage();
     }
 
-    Label* addLabel(Font font,const std::string& text, SDL_Color color={0,0,0,0}, SDL_Rect rect={0,0,128,64}){
+    Label* addLabel(Font font,const std::string& text, SDL_Color color={0,0,0,0}, SDL_Rect rect={0,0,128,64},
+                    const std::string& backgroundImage = ""){
         if(rect.x == -1)
             rect.x = this->rect.w/2 - rect.w/2;
         if(rect.y == -1)
             rect.y = this->rect.h/2 - rect.h/2;
         SDL_Rect windowedRect = {rect.x+this->rect.x,rect.y+this->rect.y,rect.w,rect.h};
 
-        Label* label = new Label(font,text,color,windowedRect);
+        Label* label = new Label(font,text,color,windowedRect,backgroundImage);
         elements.push_back(label);
         return label;
     }
@@ -112,7 +131,8 @@ public:
     Button* addButton(Font font, const std::string& text,
                       SDL_Color color = {60,120,220,255}, SDL_Rect rect = {0,0,128,64},
                       float hoverScale = 1.05f,
-                      std::function<void()> onClick = {}) {
+                      std::function<void()> onClick = {},
+                      const std::string& backgroundImage = "") {
         if(rect.x == -1)
             rect.x = this->rect.w/2 - rect.w/2;
         if(rect.y == -1)
@@ -120,7 +140,7 @@ public:
         SDL_Rect windowedRect = {rect.x+this->rect.x,rect.y+this->rect.y,rect.w,rect.h};
 
         Button* button = new Button(font, text, color, windowedRect,
-                                    hoverScale, std::move(onClick));
+                                    hoverScale, std::move(onClick), backgroundImage);
         elements.push_back(button);
         return button;
     }

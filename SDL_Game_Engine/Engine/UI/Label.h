@@ -2,11 +2,15 @@
 #include <algorithm>
 #include <cmath>
 #include "./UIElement.h"
+#include "./UIBackground.h"
 #include "../Core/Font.h"
 #include "../Renderer/TextureManager.h"
 #include "../Core/App.h"
 
 class Label : public UIElement {
+private:
+    UIBackground background;
+
 public:
     std::string text;
     Font font;
@@ -17,10 +21,28 @@ public:
     enum class Alignment { Left, Center, Right };
     Alignment alignment = Alignment::Center;
 
-    Label(Font font,const std::string& text,SDL_Color bgColor={0,0,0,0}, SDL_Rect rect={0,0,0,0}) :
+    Label(Font font,const std::string& text,SDL_Color bgColor={0,0,0,0}, SDL_Rect rect={0,0,0,0},
+          const std::string& backgroundImage = "") :
         UIElement(rect), text(text), font(font),bgColor(bgColor) {
         texture = TextureManager::LoadTextTexture(font,text);
+        if (!backgroundImage.empty()) setBackgroundImage(backgroundImage);
     };
+
+    ~Label() override {
+        clean();
+    }
+
+    bool setBackgroundImage(const std::string& fileName) {
+        return background.setImage(fileName.c_str());
+    }
+
+    void clearBackgroundImage() {
+        background.clearImage();
+    }
+
+    void setBackgroundOpacity(Uint8 alpha) {
+        background.setOpacity(alpha);
+    }
 
     void updateText(const std::string& newText) {
         text = newText;
@@ -30,7 +52,7 @@ public:
 
     void draw() override {
         SDL_Rect bgRect = {rect.x-margin/2, rect.y-margin/2, rect.w + margin, rect.h + margin};
-        TextureManager::DrawRectangle(bgRect,bgColor,bgCornerRadius);
+        drawBackground(bgRect);
 
         drawText(rect);
     }
@@ -38,9 +60,14 @@ public:
     void clean() override {
         SDL_DestroyTexture(texture);
         texture = nullptr;
+        background.clearImage();
     }
 
 protected:
+    void drawBackground(SDL_Rect bounds, Uint8 modulation = 255) const {
+        background.draw(bounds, bgColor, bgCornerRadius, modulation);
+    }
+
     void drawText(SDL_Rect bounds, float maxScale = 1.0f) {
         if (!texture || bounds.w <= 0 || bounds.h <= 0) return;
 

@@ -7,7 +7,7 @@ private:
     int layoutHeight = 0;
 
 public:
-    SettingsScene() : UIScene({255,100,100,255}) {}
+    SettingsScene(const std::string& backgroundImage = "") : UIScene({255,100,100,255}, backgroundImage) {}
 
     void onEnter(App& app) override {
         app.syncDisplaySettings();
@@ -15,25 +15,24 @@ public:
         layoutWidth = size.wight;
         layoutHeight = size.height;
         uiLayer = new UILayer(app);
-        UIBox* panel = uiLayer->addBox({-1,-1,760,640}, {255,255,255,255}, 24);
-        Font titleFont("assets/fonts/Lato-Bold.ttf", 40);
-        Font bodyFont("assets/fonts/Lato-Regular.ttf", 24);
+        UIBox* panel = uiLayer->addBox({-1,-1,920,640}, {0,0,0,128}, 24, "", false, "assets/UI/WindowBg2.png");
+        Font titleFont("assets/fonts/Lato-Bold.ttf", 40, {255,255,255,255});
+        Font bodyFont("assets/fonts/Lato-Regular.ttf", 24, {0,0,0,255});
+        Font inputFont("assets/fonts/Lato-Regular.ttf", 24, {0,0,0,255});
         Font hintFont("assets/fonts/Lato-Regular.ttf", 18, {110,116,128,255});
-        Font buttonFont("assets/fonts/Lato-Bold.ttf", 28);
+        Font buttonFont("assets/fonts/Lato-Bold.ttf", 28, {255,255,255,255});
 
-        panel->addLabel(titleFont, "Settings", {0,0,0,0}, {-1,32,480,56});
-        panel->addLabel(hintFont, u8"Zmiany są stosowane od razu.",
-                        {0,0,0,0}, {-1,94,600,28});
+        panel->addLabel(titleFont, "Settings", {0,0,0,128}, {-1,64,480,64});
 
         auto addCaption = [&](const std::string& text, int y) {
-            Label* label = panel->addLabel(bodyFont, text, {0,0,0,0}, {48,y,208,40});
+            Label* label = panel->addLabel(bodyFont, text, {0,0,0,0}, {96,y,208,40});
             label->alignment = Label::Alignment::Left;
         };
-        addCaption(u8"Głośność", 152);
-        addCaption(u8"Wycisz dźwięk", 230);
-        addCaption(u8"Pełny ekran", 308);
-        addCaption(u8"Rozdzielczość", 382);
-        addCaption("Limit FPS", 456);
+        addCaption(u8"Volume", 152);
+        addCaption(u8"Mute", 230);
+            addCaption(u8"Full Screen", 308);
+        addCaption(u8"Resolution", 382);
+        addCaption("FPS Limit", 456);
 
         Label* volumeLabel = panel->addLabel(bodyFont,
             std::to_string(app.settings.volume) + "%", {0,0,0,0}, {628,152,84,40});
@@ -66,7 +65,7 @@ public:
             if(resolution.width == app.settings.width && resolution.height == app.settings.height)
                 selectedResolution = static_cast<int>(i);
         }
-        panel->addSelect(bodyFont, std::move(resolutionOptions), selectedResolution, {280,378,328,48},
+        panel->addSelect(inputFont, std::move(resolutionOptions), selectedResolution, {280,378,328,48},
             [&app, resolutions](int index, const std::string&) {
                 const auto& resolution = resolutions[index];
                 app.setResolution(resolution.width, resolution.height);
@@ -82,15 +81,13 @@ public:
         for(int fps : fpsLimits) fpsOptions.push_back(std::to_string(fps) + " FPS");
         const int selectedFPS = static_cast<int>(
             std::find(fpsLimits.begin(), fpsLimits.end(), app.settings.fpsLimit) - fpsLimits.begin());
-        panel->addSelect(bodyFont, std::move(fpsOptions), selectedFPS, {280,452,328,48},
+        panel->addSelect(inputFont, std::move(fpsOptions), selectedFPS, {280,452,328,48},
             [&app, fpsLimits](int index, const std::string&) {
                 app.settings.fpsLimit = fpsLimits[index];
             });
 
-        panel->addLabel(hintFont, u8"Tab: zmiana pola   ·   Strzałki: zmiana wartości",
-                        {0,0,0,0}, {-1,524,680,24});
-        panel->addButton(buttonFont, u8"Powrót", {60,120,220,255}, {-1,560,200,56}, 1.05f,
-            [&app]() { App::sceneManager->changeScene(createScene1, app); });
+        panel->addButton(buttonFont, u8"Back", {0,0,0,0}, {-1,516,200,56}, 1.05f,
+            [&app]() { App::sceneManager->changeScene(createScene1, app); }, "assets/UI/btn.png");
     }
 
     void handleEvents(App& app, SDL_Event& event) override {
@@ -115,5 +112,5 @@ public:
 };
 
 Scene* createSettingsScene() {
-    return new SettingsScene();
+    return new SettingsScene("assets/UI/MainMenuBG.png");
 }

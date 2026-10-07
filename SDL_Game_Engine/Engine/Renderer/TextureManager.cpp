@@ -3,16 +3,38 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 
 #include "../Vendor/SDL2/include/SDL2/SDL_image.h"
 
 SDL_Texture* TextureManager::LoadTexture(const char *fileName) {
-    if(strcmp(fileName, "none") == 0) return nullptr;
+    if (!fileName || !*fileName || std::strcmp(fileName, "none") == 0) return nullptr;
+    if (!App::renderer) {
+        std::cerr << "Cannot load texture without a renderer: " << fileName << std::endl;
+        return nullptr;
+    }
 
     SDL_Surface* tempSurface = IMG_Load(fileName);
+    if (!tempSurface) {
+        std::cerr << "Failed to load image '" << fileName << "': " << IMG_GetError() << std::endl;
+        return nullptr;
+    }
     SDL_Texture* tex = SDL_CreateTextureFromSurface(App::renderer,tempSurface);
     SDL_FreeSurface(tempSurface);
+
+    if (!tex) {
+        std::cerr << "Failed to create image texture '" << fileName << "': "
+                  << SDL_GetError() << std::endl;
+        return nullptr;
+    }
+    if (SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND) != 0 ||
+        SDL_SetTextureScaleMode(tex, SDL_ScaleModeLinear) != 0) {
+        std::cerr << "Failed to configure image texture '" << fileName << "': "
+                  << SDL_GetError() << std::endl;
+        SDL_DestroyTexture(tex);
+        return nullptr;
+    }
 
     return tex;
 }

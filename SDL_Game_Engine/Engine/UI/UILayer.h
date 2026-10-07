@@ -147,7 +147,8 @@ public:
         if(focusedElement && focusedElement->hasOverlay()) focusedElement->drawOverlay();
     }
 
-    UIBox* addBox(SDL_Rect rect, SDL_Color color={255,255,255,255},int cornerRadius=0, std::string name="", bool isClosed=false){
+    UIBox* addBox(SDL_Rect rect, SDL_Color color={255,255,255,255},int cornerRadius=0, std::string name="",
+                  bool isClosed=false, const std::string& backgroundImage = ""){
         int windowWith;
         int windowHeight;
 
@@ -164,7 +165,7 @@ public:
         name != "" ? finalName = name :
         finalName = "Box" + std::to_string(boxes.size());
 
-        UIBox* box = new UIBox(finalName, rect, color, cornerRadius, isClosed);
+        UIBox* box = new UIBox(finalName, rect, color, cornerRadius, isClosed, backgroundImage);
         boxes.push_back(box);
         return box;
     }

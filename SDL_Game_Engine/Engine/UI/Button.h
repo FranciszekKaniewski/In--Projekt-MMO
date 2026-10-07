@@ -19,8 +19,9 @@ public:
     Button(Font font, const std::string& text,
            SDL_Color bgColor = {60, 120, 220, 255},
            SDL_Rect rect = {0, 0, 128, 64},
-           float hoverScale = 1.05f, std::function<void()> onClick = {}) :
-        Label(font, text, bgColor, rect),
+           float hoverScale = 1.05f, std::function<void()> onClick = {},
+           const std::string& backgroundImage = "") :
+        Label(font, text, bgColor, rect, backgroundImage),
         hoverScale(hoverScale), onClick(std::move(onClick)) {}
 
     ~Button() override {
@@ -52,13 +53,7 @@ public:
         drawRect.y -= (drawRect.h - rect.h) / 2;
 
         const Uint8 backgroundMod = isHovered ? 128 : 255;
-        SDL_Color drawColor = {
-            static_cast<Uint8>(bgColor.r * backgroundMod / 255),
-            static_cast<Uint8>(bgColor.g * backgroundMod / 255),
-            static_cast<Uint8>(bgColor.b * backgroundMod / 255),
-            bgColor.a
-        };
-        TextureManager::DrawRectangle(drawRect, drawColor, bgCornerRadius);
+        drawBackground(drawRect, backgroundMod);
 
         if (!texture) return;
 
