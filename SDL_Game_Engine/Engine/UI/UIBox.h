@@ -25,6 +25,16 @@ private:
 
     std::vector<UIElement*> elements;
 
+    friend class UILayer;
+    void clean(){
+        for(UIElement* e : elements){
+            e->clean();
+            delete e;
+        }
+        elements.clear();
+        background.clearImage();
+    }
+
 public:
     UIBox(std::string name, SDL_Rect rect, SDL_Color bgColor = {255,255,255,255}, int cornerRadius = 0,
           bool isClosed = false, const std::string& backgroundImage = "") :
@@ -104,15 +114,6 @@ public:
                 if(element->isFocusable()) result.push_back(element);
         }
         return result;
-    }
-
-    void clean(){
-        for(UIElement* e : elements){
-            e->clean();
-            delete e;
-        }
-        elements.clear();
-        background.clearImage();
     }
 
     Label* addLabel(Font font,const std::string& text, SDL_Color color={0,0,0,0}, SDL_Rect rect={0,0,128,64},

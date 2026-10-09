@@ -170,7 +170,21 @@ public:
         return box;
     }
 
-    void removeWindow(UIBox* box) {
+    void cleanBox(UIBox* box) {
+        if(!box) return;
+
+        auto it = std::find(boxes.begin(), boxes.end(), box);
+
+        if (it != boxes.end()) {
+            if (focusedBox == box) {
+                focusElement(nullptr);
+            }
+
+            (*it)->clean();
+        }
+    }
+
+    void removeBox(UIBox* box) {
         if(!box) return;
 
         auto it = std::find(boxes.begin(), boxes.end(), box);
