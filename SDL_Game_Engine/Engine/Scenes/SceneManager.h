@@ -15,9 +15,14 @@ public:
     void changeScene(std::function<Scene*()> factory, App& app);
     void closeScene(App& app);
     void handleEvents(App& app, SDL_Event& event);
+    void update(App& app);
+    void render(App& app);
 
 private:
-    bool handlingEvents = false;
+    bool processingScene = false;
     bool hasPendingSceneChange = false;
     std::function<Scene*()> pendingSceneFactory;
+
+    void applyPendingSceneChange(App& app);
+    void destroyScene(App& app);
 };

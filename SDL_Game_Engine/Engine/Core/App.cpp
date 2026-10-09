@@ -122,8 +122,8 @@ void App::init(const char* configPath) {
 }
 
 void App::update() {
-    if (sceneManager && sceneManager->activeScene) {
-        sceneManager->activeScene->update(*this);
+    if (sceneManager) {
+        sceneManager->update(*this);
     }
 }
 
@@ -301,7 +301,7 @@ void App::handleEvents() {
 void App::render() {
     if(!renderer) return;
     if (sceneManager && sceneManager->activeScene) {
-        sceneManager->activeScene->render(*this);
+        sceneManager->render(*this);
     } else {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);

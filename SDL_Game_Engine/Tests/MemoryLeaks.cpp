@@ -134,6 +134,80 @@ static void exerciseScenes(App& app) {
     emptyScene(app);
 }
 
+struct SceneChangeState {
+    bool continued = false;
+    bool exited = false;
+    bool destroyed = false;
+    bool replacementCreated = false;
+};
+
+class SceneChangeTest : public Scene {
+    SceneChangeState& state;
+    int phase;
+    bool close;
+    int counter = 0;
+
+    void requestChange(App& app) {
+        auto& result = state;
+        if(close) {
+            App::sceneManager->closeScene(app);
+        } else {
+            App::sceneManager->changeScene([&result]() -> Scene* {
+                require(result.continued && result.exited && result.destroyed,
+                        "Replacement created before the old scene finished");
+                result.replacementCreated = true;
+                return new UIScene();
+            }, app);
+        }
+        require(!result.exited && !result.destroyed,
+                "Scene destroyed while its method was still running");
+        // Using a member after requesting a transition must remain safe.
+        ++counter;
+        result.continued = counter == 1;
+    }
+
+public:
+    SceneChangeTest(SceneChangeState& state, int phase, bool close)
+        : state(state), phase(phase), close(close) {}
+    ~SceneChangeTest() override { state.destroyed = true; }
+    void onExit(App&) override { state.exited = true; }
+    void handleEvents(App& app, SDL_Event&) override {
+        if(phase == 0) requestChange(app);
+    }
+    void update(App& app) override {
+        if(phase == 1) requestChange(app);
+    }
+    void render(App& app) override {
+        if(phase == 2) requestChange(app);
+    }
+};
+
+static void exerciseDeferredSceneChanges(App& app) {
+    for(int phase = 0; phase < 3; ++phase) {
+        for(bool close : {false, true}) {
+            SceneChangeState state;
+            App::sceneManager->changeScene([&]() -> Scene* {
+                return new SceneChangeTest(state, phase, close);
+            }, app);
+            if(phase == 0) {
+                SDL_Event event = {};
+                event.type = SDL_USEREVENT;
+                App::sceneManager->handleEvents(app, event);
+            } else if(phase == 1) {
+                app.update();
+            } else {
+                app.render();
+            }
+            require(state.continued && state.exited && state.destroyed,
+                    "Pending scene transition was not applied after the method returned");
+            require(close ? App::sceneManager->activeScene == nullptr
+                          : state.replacementCreated && App::sceneManager->activeScene != nullptr,
+                    "Scene transition produced the wrong active scene");
+            App::sceneManager->closeScene(app);
+        }
+    }
+}
+
 static constexpr const char* menuMusicPath =
     "Assets/Audio/Music/runic_sanctuary_hopeful_loop.ogg";
 
@@ -265,6 +339,7 @@ int main() {
                     (info.flags & SDL_RENDERER_SOFTWARE),
                     "Headless initialization must choose a software renderer");
             exerciseScenes(warmup);
+            exerciseDeferredSceneChanges(warmup);
             exerciseUIOwnership(warmup);
             exerciseAudio(warmup);
             startAudioForCleanup(warmup);
@@ -287,6 +362,8 @@ int main() {
             }
             exerciseUIOwnership(app);
             sceneBaseline.check("UI, texture and font ownership");
+            exerciseDeferredSceneChanges(app);
+            sceneBaseline.check("Deferred scene changes and closure");
             startAudioForCleanup(app);
             app.clean();
             requireClosed(app);
@@ -334,7 +411,8 @@ int main() {
             }
             shutdownBaseline.check("Injected initialization failure");
         }
-        std::printf("PASS: 300 scene transitions, UI/text/PNG/font updates, repeated init, "
+        std::printf("PASS: 300 scene transitions, deferred scene changes/closure, "
+                    "UI/text/PNG/font updates, repeated init, "
                     "WAV/OGG playback, pause/resume, volume/mute, exhausted channels, "
                     "cleanup, destructors and 7 startup failure paths; "
                     "SDL=%d, C++=%lld (unchanged baseline).\n",

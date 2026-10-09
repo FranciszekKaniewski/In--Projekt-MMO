@@ -3,13 +3,13 @@
 #include <utility>
 
 void SceneManager::changeScene(std::function<Scene*()> factory, App& app) {
-    if (handlingEvents) {
+    if (processingScene) {
         pendingSceneFactory = std::move(factory);
         hasPendingSceneChange = true;
         return;
     }
 
-    closeScene(app);
+    destroyScene(app);
 
     if (factory) {
         activeScene = factory();
@@ -20,6 +20,10 @@ void SceneManager::changeScene(std::function<Scene*()> factory, App& app) {
 }
 
 void SceneManager::closeScene(App& app) {
+    changeScene({}, app);
+}
+
+void SceneManager::destroyScene(App& app) {
     pendingSceneFactory = {};
     hasPendingSceneChange = false;
     std::unique_ptr<Scene> scene(std::exchange(activeScene, nullptr));
@@ -29,14 +33,38 @@ void SceneManager::closeScene(App& app) {
 void SceneManager::handleEvents(App& app, SDL_Event& event) {
     if (!activeScene) return;
 
-    // Scene changes may delete UI elements; finish dispatch before applying them.
-    handlingEvents = true;
+    // Finish the scene method before applying a change that may destroy it.
+    processingScene = true;
     activeScene->handleEvents(app, event);
-    handlingEvents = false;
+    processingScene = false;
 
-    if (hasPendingSceneChange) {
-        auto factory = std::move(pendingSceneFactory);
-        hasPendingSceneChange = false;
-        changeScene(std::move(factory), app);
-    }
+    applyPendingSceneChange(app);
+}
+
+void SceneManager::update(App& app) {
+    if (!activeScene) return;
+
+    processingScene = true;
+    activeScene->update(app);
+    processingScene = false;
+
+    applyPendingSceneChange(app);
+}
+
+void SceneManager::render(App& app) {
+    if (!activeScene) return;
+
+    processingScene = true;
+    activeScene->render(app);
+    processingScene = false;
+
+    applyPendingSceneChange(app);
+}
+
+void SceneManager::applyPendingSceneChange(App& app) {
+    if (!hasPendingSceneChange) return;
+
+    auto factory = std::move(pendingSceneFactory);
+    hasPendingSceneChange = false;
+    changeScene(std::move(factory), app);
 }
