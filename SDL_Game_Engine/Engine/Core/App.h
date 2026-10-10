@@ -5,6 +5,7 @@
 #include "../Audio/AudioManager.h"
 
 class SceneManager;
+class Label;
 
 struct WindowSize {
     int wight;
@@ -14,7 +15,7 @@ struct WindowSize {
 struct GameSettings {
     int volume = 100;
     bool muted = false;
-    int fpsLimit = 60;
+    int fpsLimit = 60; // 0 means unlimited.
     bool fullscreen = false;
     int width = 1280;
     int height = 720;
@@ -34,6 +35,7 @@ public:
 
     std::string title;
     static float deltaTime;
+    int currentFPS = 0;
     bool isRunning = false;
     bool devMode = false;
     GameSettings settings;
@@ -69,6 +71,7 @@ public:
     bool setResolution(int width, int height);
     std::vector<WindowResolution> getAvailableResolutions() const;
 private:
+    Label* fpsLabel = nullptr;
     bool sdlInitialized = false;
     bool ttfInitialized = false;
     bool imageInitialized = false;

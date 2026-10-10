@@ -11,6 +11,7 @@
 
 #include "./Config.h"
 #include "../Scenes/SceneManager.h"
+#include "../UI/Label.h"
 
 
 SDL_Renderer* App::renderer = nullptr;
@@ -35,7 +36,10 @@ void App::init(const char* configPath) {
     }
 
     this->title = cfg.window.title;
-    settings.fpsLimit = std::max(1, cfg.game.fps);
+    settings.fpsLimit = std::max(0, cfg.game.fps);
+    devMode = cfg.game.devMode;
+    currentFPS = 0;
+    deltaTime = 0.0f;
     settings.fullscreen = cfg.window.fullscreen;
     settings.width = cfg.window.width;
     settings.height = cfg.window.height;
@@ -70,9 +74,9 @@ void App::init(const char* configPath) {
     const char* videoDriver = SDL_GetCurrentVideoDriver();
     const bool headless = videoDriver &&
         (std::strcmp(videoDriver, "dummy") == 0 || std::strcmp(videoDriver, "offscreen") == 0);
-    // Headless windows cannot use Direct3D; avoid failed hardware initialization.
+    // The main loop limits FPS; do not also request VSync from the renderer.
     renderer = SDL_CreateRenderer(window, -1,
-        headless ? SDL_RENDERER_SOFTWARE : SDL_RENDERER_PRESENTVSYNC);
+        headless ? SDL_RENDERER_SOFTWARE : 0);
     if(!renderer) {
         std::cerr << "SDL_CreateRenderer error: " << SDL_GetError() << std::endl;
         clean();
@@ -281,7 +285,7 @@ void App::handleEvents() {
                 isRunning = false;
                 break;
             case SDL_KEYDOWN:
-                if (event.key.keysym.sym == SDLK_F1) {
+                if (event.key.keysym.sym == SDLK_F1 && !event.key.repeat) {
                     devMode = !devMode;
                 }
                 break;
@@ -307,11 +311,25 @@ void App::render() {
         SDL_RenderClear(renderer);
     }
 
+    if(devMode) {
+        const std::string fpsText = "FPS: " + std::to_string(currentFPS);
+        if(!fpsLabel) {
+            fpsLabel = new Label(Font("Assets/fonts/Lato-Regular.ttf", 20, {255,255,255,255}),
+                                 fpsText, {0,0,0,180}, {8,8,156,28});
+            fpsLabel->alignment = Label::Alignment::Left;
+            fpsLabel->margin = 8;
+            fpsLabel->bgCornerRadius = 4;
+        } else if(fpsLabel->text != fpsText) {
+            fpsLabel->updateText(fpsText);
+        }
+        fpsLabel->draw();
+    }
+
     SDL_RenderPresent(renderer);
 }
 
 void App::clean() {
-    const bool hadResources = sceneManager || renderer || window || sdlInitialized ||
+    const bool hadResources = fpsLabel || sceneManager || renderer || window || sdlInitialized ||
         ttfInitialized || imageInitialized || mixerInitialized || audioOpened;
     isRunning = false;
 
@@ -321,6 +339,8 @@ void App::clean() {
         delete sceneManager;
         sceneManager = nullptr;
     }
+    delete fpsLabel;
+    fpsLabel = nullptr;
     audio.clear();
     if(renderer) SDL_DestroyRenderer(renderer);
     renderer = nullptr;

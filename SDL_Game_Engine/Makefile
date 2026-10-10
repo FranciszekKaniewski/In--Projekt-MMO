@@ -1,7 +1,7 @@
 .PHONY: build run bar test
 
 
-OUT_NAME := main
+OUT_NAME := SDL_Game_Engine
 
 LIB_DIR := Engine/Vendor/SDL2/lib
 INCLUDE_DIR := Engine/Vendor/SDL2/include/SDL2
@@ -12,10 +12,10 @@ DLL_FILES := -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_Mixer -lSDL2_ttf
 GENERAL_H_FILES := ./Engine/Headers/
 SPEC_H_FILES := ./Engine/Headers/*/
 ECS_H_FILES := ./Engine/ECS_Components/
-ECS_SPEC_H_FILES := ./Engine/ECS_Components/Headers/
 
 GAME_H_FILES := ./Game/scenes/Headers/
 GAME_SCRIPTS_FILES := ./Game/scripts/Headers/
+ECS_SPEC_H_FILES := ./Engine/ECS_Components/Headers/
 
 GENERAL_CPP_FILES := $(wildcard ./Engine/*.cpp)
 SPEC_CPP_FILES := $(wildcard ./Engine/*/*.cpp)

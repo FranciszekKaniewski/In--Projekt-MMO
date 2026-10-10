@@ -72,13 +72,14 @@ public:
                 App::sceneManager->changeScene(createSettingsScene, app);
             });
 
-        std::vector<int> fpsLimits = {30,60,120,144,240};
+        std::vector<int> fpsLimits = {0,30,60,120,144,240};
         if(std::find(fpsLimits.begin(), fpsLimits.end(), app.settings.fpsLimit) == fpsLimits.end()) {
             fpsLimits.push_back(app.settings.fpsLimit);
             std::sort(fpsLimits.begin(), fpsLimits.end());
         }
         std::vector<std::string> fpsOptions;
-        for(int fps : fpsLimits) fpsOptions.push_back(std::to_string(fps) + " FPS");
+        for(int fps : fpsLimits)
+            fpsOptions.push_back(fps == 0 ? "Non-limit" : std::to_string(fps) + " FPS");
         const int selectedFPS = static_cast<int>(
             std::find(fpsLimits.begin(), fpsLimits.end(), app.settings.fpsLimit) - fpsLimits.begin());
         panel->addSelect(inputFont, std::move(fpsOptions), selectedFPS, {280,452,328,48},

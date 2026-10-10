@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <new>
 #include <stdexcept>
 
@@ -131,6 +132,73 @@ static void exerciseScenes(App& app) {
         app.update();
         app.render();
     }
+    emptyScene(app);
+}
+
+static void exerciseFPSSettings(App& app) {
+    const int previousLimit = app.settings.fpsLimit;
+    const auto fpsSelect = [&]() {
+        auto* scene = static_cast<UIScene*>(App::sceneManager->activeScene);
+        const WindowSize size = app.getUISize();
+        auto* select = dynamic_cast<Select*>(scene->uiLayer->getBoxByIndex(0)->getElementAtPoint(
+            size.wight / 2 - 460 + 288, size.height / 2 - 320 + 460));
+        require(select != nullptr, "FPS selection control was not found");
+        return select;
+    };
+    App::sceneManager->changeScene(createSettingsScene, app);
+    Select* select = fpsSelect();
+    require(select->getOptions().front() == "Bez limitu", "Unlimited option is missing");
+    select->setSelectedIndex(0);
+    require(app.settings.fpsLimit == 0, "Unlimited selection did not disable the cap");
+    App::sceneManager->changeScene(createSettingsScene, app);
+    require(fpsSelect()->getSelectedText() == "Bez limitu",
+            "Unlimited selection was lost when reopening settings");
+    fpsSelect()->setSelectedIndex(2);
+    require(app.settings.fpsLimit == 60, "Cannot restore a limited FPS setting");
+    app.settings.fpsLimit = previousLimit;
+    emptyScene(app);
+}
+
+static void exerciseFPSOverlay(App& app) {
+    const bool previousDevMode = app.devMode;
+    App::sceneManager->closeScene(app);
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+    const SDL_Rect bounds = {0,0,180,48};
+    Uint32 hidden[180 * 48] = {}, visible[180 * 48] = {}, updated[180 * 48] = {};
+    const auto capture = [&](Uint32* pixels) {
+        app.render();
+        require(SDL_RenderReadPixels(App::renderer, &bounds, SDL_PIXELFORMAT_RGBA8888,
+                                    pixels, 180 * sizeof(Uint32)) == 0,
+                "Cannot inspect the FPS overlay");
+    };
+    const auto pressF1 = [&](Uint8 repeat = 0) {
+        SDL_Event event = {};
+        event.type = SDL_KEYDOWN;
+        event.key.keysym.sym = SDLK_F1;
+        event.key.repeat = repeat;
+        require(SDL_PushEvent(&event) == 1, "Cannot toggle developer mode");
+        app.handleEvents();
+    };
+    app.devMode = false;
+    app.currentFPS = 1234567890; // Warm every digit in the cached overlay font.
+    capture(hidden);
+    pressF1(1);
+    require(!app.devMode, "A repeated F1 event toggled developer mode");
+    pressF1();
+    require(app.devMode, "F1 did not enable developer mode");
+    capture(visible);
+    require(std::memcmp(hidden, visible, sizeof(hidden)) != 0,
+            "FPS label did not appear in the top-left corner");
+    app.currentFPS = 60;
+    capture(updated);
+    require(std::memcmp(visible, updated, sizeof(visible)) != 0,
+            "FPS label did not update its displayed value");
+    pressF1();
+    capture(visible);
+    require(!app.devMode && std::memcmp(hidden, visible, sizeof(hidden)) == 0,
+            "FPS label remained visible outside developer mode");
+    app.currentFPS = 0;
+    app.devMode = previousDevMode;
     emptyScene(app);
 }
 
@@ -339,6 +407,8 @@ int main() {
                     (info.flags & SDL_RENDERER_SOFTWARE),
                     "Headless initialization must choose a software renderer");
             exerciseScenes(warmup);
+            exerciseFPSSettings(warmup);
+            exerciseFPSOverlay(warmup);
             exerciseDeferredSceneChanges(warmup);
             exerciseUIOwnership(warmup);
             exerciseAudio(warmup);
@@ -352,6 +422,8 @@ int main() {
             app.init("Config/settings.json");
             require(app.isRunning, "App initialization failed");
             exerciseScenes(app);
+            exerciseFPSSettings(app);
+            exerciseFPSOverlay(app);
             exerciseUIOwnership(app);
             exerciseAudio(app);
             emptyScene(app);
@@ -364,6 +436,9 @@ int main() {
             sceneBaseline.check("UI, texture and font ownership");
             exerciseDeferredSceneChanges(app);
             sceneBaseline.check("Deferred scene changes and closure");
+            exerciseFPSSettings(app);
+            exerciseFPSOverlay(app);
+            sceneBaseline.check("FPS settings and developer overlay");
             startAudioForCleanup(app);
             app.clean();
             requireClosed(app);
@@ -412,7 +487,7 @@ int main() {
             shutdownBaseline.check("Injected initialization failure");
         }
         std::printf("PASS: 300 scene transitions, deferred scene changes/closure, "
-                    "UI/text/PNG/font updates, repeated init, "
+                    "FPS settings/developer overlay, UI/text/PNG/font updates, repeated init, "
                     "WAV/OGG playback, pause/resume, volume/mute, exhausted channels, "
                     "cleanup, destructors and 7 startup failure paths; "
                     "SDL=%d, C++=%lld (unchanged baseline).\n",
