@@ -11,12 +11,16 @@
 #include "../Renderer/TextureManager.h"
 
 class Input : public UIElement {
+public:
+    enum class Type { Text, Password };
+
 private:
     Font font;
     std::string text;
     std::string placeholder;
 
     SDL_Texture* texture = nullptr;
+    Type renderedType = Type::Text;
 
     std::size_t cursor = 0;
 
@@ -60,6 +64,19 @@ private:
         return value;
     }
 
+    std::string displayText(std::size_t length) const {
+        if (type == Type::Password) {
+            const auto characters = std::count_if(
+                    text.begin(), text.begin() + length,
+                    [](char c) { return !isContinuation(c); }
+            );
+
+            return std::string(characters, '*');
+        }
+
+        return text.substr(0, length);
+    }
+
     void rebuildTexture() {
         SDL_DestroyTexture(texture);
 
@@ -71,8 +88,9 @@ private:
 
         texture = TextureManager::LoadTextTexture(
                 drawFont,
-                text.empty() ? placeholder : text
+                text.empty() ? placeholder : displayText(text.size())
         );
+        renderedType = type;
     }
 
     void textChanged() {
@@ -90,13 +108,15 @@ private:
         int width = 0;
         int height = 0;
 
-        const std::string prefix = text.substr(0, cursor);
+        const std::string prefix = displayText(cursor);
         TTF_SizeUTF8(font.font, prefix.c_str(), &width, &height);
 
         return width;
     }
 
 public:
+    Type type = Type::Text;
+
     int padding = 10;
     int cornerRadius = 8;
 
@@ -111,11 +131,13 @@ public:
     Input(
             Font font,
             const std::string& placeholder = "",
-            SDL_Rect rect = {0, 0, 280, 48}
+            SDL_Rect rect = {0, 0, 280, 48},
+            Type type = Type::Text
     )
             : UIElement(rect),
               font(std::move(font)),
-              placeholder(placeholder) {
+              placeholder(placeholder),
+              type(type) {
         rebuildTexture();
     }
 
@@ -257,6 +279,10 @@ public:
 
     void draw() override {
         if (!App::renderer || rect.w <= 4 || rect.h <= 4) return;
+
+        if (type != renderedType) {
+            rebuildTexture();
+        }
 
         TextureManager::DrawRectangle(
                 rect,

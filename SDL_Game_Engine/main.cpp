@@ -10,14 +10,6 @@ int main(int argv, char** args) {
     app.init("Config/settings.json");
     if (!app.isRunning) return 1;
 
-    if (app.audio.loadMusic("menu", "Assets/Audio/Music/runic_sanctuary_hopeful_loop.ogg")) {
-        app.audio.playMusic("menu", true);
-    }
-    app.audio.loadSound(
-            "button.click",
-            "Assets/Audio/Sounds/rune_button_click.wav"
-    );
-
     const Uint64 timerFrequency = SDL_GetPerformanceFrequency();
     const double fixedTimeStep = 1.0 / 60.0;
     const int maxUpdatesPerFrame = 5;

@@ -159,8 +159,8 @@ public:
     }
 
     Input* addInput(Font font, const std::string& placeholder = "",
-                    SDL_Rect rect = {0,0,280,48}) {
-        return addInput(new Input(std::move(font), placeholder, rect));
+                    SDL_Rect rect = {0,0,280,48}, Input::Type type = Input::Type::Text) {
+        return addInput(new Input(std::move(font), placeholder, rect, type));
     }
 
     Input* addInput(Input* input) {

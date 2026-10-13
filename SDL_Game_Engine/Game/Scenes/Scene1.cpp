@@ -6,7 +6,6 @@ public:
     UIScene1(SDL_Color color, const std::string& backgroundImage = "") : UIScene(color, backgroundImage) {}
 
     void onEnter(App& app) override {
-        std::cout << "Entering Scene 1!" << std::endl;
 
         uiLayer = new UILayer(app);
         uiLayer->addBox({-1,25,600,128}, {0,0,0,124}, 24);
@@ -24,7 +23,7 @@ public:
             std::cout << "Login: " << name << '\n';
         };
         Input* passwordInput = uiLayer->getBoxByIndex(1)->addInput(
-                inputFont, u8"Password...", {-1,48+16+48,320,48});
+                inputFont, u8"Password...", {-1,48+16+48,320,48}, Input::Type::Password);
         passwordInput->onSubmit = [](const std::string& name){
             std::cout << "Password: " << name << '\n';
         };

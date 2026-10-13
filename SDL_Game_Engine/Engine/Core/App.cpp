@@ -120,6 +120,14 @@ void App::init(const char* configPath) {
     std::cout << "Audio Initialized!" << std::endl;
     applyAudioSettings();
 
+    if (audio.loadMusic("menu", "Assets/Audio/Music/runic_sanctuary_hopeful_loop.ogg")) {
+        audio.playMusic("menu", true);
+    }
+    audio.loadSound(
+            "button.click",
+            "Assets/Audio/Sounds/rune_button_click.wav"
+    );
+
     sceneManager = new SceneManager();
     isRunning = true;
     sceneManager->changeScene(createScene1, *this);
