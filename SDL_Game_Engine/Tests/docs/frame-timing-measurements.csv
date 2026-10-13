@@ -1,0 +1,5 @@
+stage,limit_fps,measured_fps,updates_per_second,current_fps,minimum_fps,maximum_fps,fps_pass,logic_pass
+1,1,1.0,59.88,1,0.9,1.02,True,True
+2,5,4.95,59.91,5,4.5,5.1,True,True
+3,10,9.16,60.01,9,9.0,10.2,True,True
+4,30,25.49,59.94,26,27.0,30.6,False,True

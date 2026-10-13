@@ -11,7 +11,7 @@
 
 #include "./Config.h"
 #include "../Scenes/SceneManager.h"
-#include "../UI/Label.h"
+#include "../UI/elements/Label.h"
 
 
 SDL_Renderer* App::renderer = nullptr;

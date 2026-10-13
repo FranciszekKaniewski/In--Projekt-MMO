@@ -6,9 +6,9 @@
 #include <utility>
 
 #include "./UIElement.h"
-#include "../Core/Font.h"
-#include "../Core/App.h"
-#include "../Renderer/TextureManager.h"
+#include "../../Core/Font.h"
+#include "../../Core/App.h"
+#include "../../Renderer/TextureManager.h"
 
 class Input : public UIElement {
 public:

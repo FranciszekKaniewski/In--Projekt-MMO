@@ -1,0 +1,114 @@
+checkpoint,phase,scene_transitions,sdl_before,sdl_after,sdl_delta,cpp_before,cpp_after,cpp_delta
+1,Scene transitions,3,1508,1508,0,12,12,0
+2,Scene transitions,6,1508,1508,0,12,12,0
+3,Scene transitions,9,1508,1508,0,12,12,0
+4,Scene transitions,12,1508,1508,0,12,12,0
+5,Scene transitions,15,1508,1508,0,12,12,0
+6,Scene transitions,18,1508,1508,0,12,12,0
+7,Scene transitions,21,1508,1508,0,12,12,0
+8,Scene transitions,24,1508,1508,0,12,12,0
+9,Scene transitions,27,1508,1508,0,12,12,0
+10,Scene transitions,30,1508,1508,0,12,12,0
+11,Scene transitions,33,1508,1508,0,12,12,0
+12,Scene transitions,36,1508,1508,0,12,12,0
+13,Scene transitions,39,1508,1508,0,12,12,0
+14,Scene transitions,42,1508,1508,0,12,12,0
+15,Scene transitions,45,1508,1508,0,12,12,0
+16,Scene transitions,48,1508,1508,0,12,12,0
+17,Scene transitions,51,1508,1508,0,12,12,0
+18,Scene transitions,54,1508,1508,0,12,12,0
+19,Scene transitions,57,1508,1508,0,12,12,0
+20,Scene transitions,60,1508,1508,0,12,12,0
+21,Scene transitions,63,1508,1508,0,12,12,0
+22,Scene transitions,66,1508,1508,0,12,12,0
+23,Scene transitions,69,1508,1508,0,12,12,0
+24,Scene transitions,72,1508,1508,0,12,12,0
+25,Scene transitions,75,1508,1508,0,12,12,0
+26,Scene transitions,78,1508,1508,0,12,12,0
+27,Scene transitions,81,1508,1508,0,12,12,0
+28,Scene transitions,84,1508,1508,0,12,12,0
+29,Scene transitions,87,1508,1508,0,12,12,0
+30,Scene transitions,90,1508,1508,0,12,12,0
+31,Scene transitions,93,1508,1508,0,12,12,0
+32,Scene transitions,96,1508,1508,0,12,12,0
+33,Scene transitions,99,1508,1508,0,12,12,0
+34,Scene transitions,102,1508,1508,0,12,12,0
+35,Scene transitions,105,1508,1508,0,12,12,0
+36,Scene transitions,108,1508,1508,0,12,12,0
+37,Scene transitions,111,1508,1508,0,12,12,0
+38,Scene transitions,114,1508,1508,0,12,12,0
+39,Scene transitions,117,1508,1508,0,12,12,0
+40,Scene transitions,120,1508,1508,0,12,12,0
+41,Scene transitions,123,1508,1508,0,12,12,0
+42,Scene transitions,126,1508,1508,0,12,12,0
+43,Scene transitions,129,1508,1508,0,12,12,0
+44,Scene transitions,132,1508,1508,0,12,12,0
+45,Scene transitions,135,1508,1508,0,12,12,0
+46,Scene transitions,138,1508,1508,0,12,12,0
+47,Scene transitions,141,1508,1508,0,12,12,0
+48,Scene transitions,144,1508,1508,0,12,12,0
+49,Scene transitions,147,1508,1508,0,12,12,0
+50,Scene transitions,150,1508,1508,0,12,12,0
+51,Scene transitions,153,1508,1508,0,12,12,0
+52,Scene transitions,156,1508,1508,0,12,12,0
+53,Scene transitions,159,1508,1508,0,12,12,0
+54,Scene transitions,162,1508,1508,0,12,12,0
+55,Scene transitions,165,1508,1508,0,12,12,0
+56,Scene transitions,168,1508,1508,0,12,12,0
+57,Scene transitions,171,1508,1508,0,12,12,0
+58,Scene transitions,174,1508,1508,0,12,12,0
+59,Scene transitions,177,1508,1508,0,12,12,0
+60,Scene transitions,180,1508,1508,0,12,12,0
+61,Scene transitions,183,1508,1508,0,12,12,0
+62,Scene transitions,186,1508,1508,0,12,12,0
+63,Scene transitions,189,1508,1508,0,12,12,0
+64,Scene transitions,192,1508,1508,0,12,12,0
+65,Scene transitions,195,1508,1508,0,12,12,0
+66,Scene transitions,198,1508,1508,0,12,12,0
+67,Scene transitions,201,1508,1508,0,12,12,0
+68,Scene transitions,204,1508,1508,0,12,12,0
+69,Scene transitions,207,1508,1508,0,12,12,0
+70,Scene transitions,210,1508,1508,0,12,12,0
+71,Scene transitions,213,1508,1508,0,12,12,0
+72,Scene transitions,216,1508,1508,0,12,12,0
+73,Scene transitions,219,1508,1508,0,12,12,0
+74,Scene transitions,222,1508,1508,0,12,12,0
+75,Scene transitions,225,1508,1508,0,12,12,0
+76,Scene transitions,228,1508,1508,0,12,12,0
+77,Scene transitions,231,1508,1508,0,12,12,0
+78,Scene transitions,234,1508,1508,0,12,12,0
+79,Scene transitions,237,1508,1508,0,12,12,0
+80,Scene transitions,240,1508,1508,0,12,12,0
+81,Scene transitions,243,1508,1508,0,12,12,0
+82,Scene transitions,246,1508,1508,0,12,12,0
+83,Scene transitions,249,1508,1508,0,12,12,0
+84,Scene transitions,252,1508,1508,0,12,12,0
+85,Scene transitions,255,1508,1508,0,12,12,0
+86,Scene transitions,258,1508,1508,0,12,12,0
+87,Scene transitions,261,1508,1508,0,12,12,0
+88,Scene transitions,264,1508,1508,0,12,12,0
+89,Scene transitions,267,1508,1508,0,12,12,0
+90,Scene transitions,270,1508,1508,0,12,12,0
+91,Scene transitions,273,1508,1508,0,12,12,0
+92,Scene transitions,276,1508,1508,0,12,12,0
+93,Scene transitions,279,1508,1508,0,12,12,0
+94,Scene transitions,282,1508,1508,0,12,12,0
+95,Scene transitions,285,1508,1508,0,12,12,0
+96,Scene transitions,288,1508,1508,0,12,12,0
+97,Scene transitions,291,1508,1508,0,12,12,0
+98,Scene transitions,294,1508,1508,0,12,12,0
+99,Scene transitions,297,1508,1508,0,12,12,0
+100,Scene transitions,300,1508,1508,0,12,12,0
+101,"UI, texture and font ownership",,1508,1508,0,12,12,0
+102,Deferred scene changes and closure,,1508,1508,0,12,12,0
+103,FPS settings and developer overlay,,1508,1508,0,12,12,0
+104,Explicit cleanup and destructor,,1,1,0,0,0,0
+105,App destructor and repeated initialization,,1,1,0,0,0,0
+106,Failed initialization,,1,1,0,0,0,0
+107,Injected initialization failure,,1,1,0,0,0,0
+108,Injected initialization failure,,1,1,0,0,0,0
+109,Injected initialization failure,,1,1,0,0,0,0
+110,Injected initialization failure,,1,1,0,0,0,0
+111,Injected initialization failure,,1,1,0,0,0,0
+112,Injected initialization failure,,1,1,0,0,0,0
+113,Injected initialization failure,,1,1,0,0,0,0

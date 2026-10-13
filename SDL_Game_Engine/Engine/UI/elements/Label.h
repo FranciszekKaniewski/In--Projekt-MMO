@@ -2,10 +2,10 @@
 #include <algorithm>
 #include <cmath>
 #include "./UIElement.h"
-#include "./UIBackground.h"
-#include "../Core/Font.h"
-#include "../Renderer/TextureManager.h"
-#include "../Core/App.h"
+#include "../UIBackground.h"
+#include "../../Core/Font.h"
+#include "../../Renderer/TextureManager.h"
+#include "../../Core/App.h"
 
 class Label : public UIElement {
 private:

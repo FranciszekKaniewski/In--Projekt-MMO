@@ -4,8 +4,8 @@
 #include <functional>
 #include <utility>
 #include "./UIElement.h"
-#include "../Core/App.h"
-#include "../Renderer/TextureManager.h"
+#include "../../Core/App.h"
+#include "../../Renderer/TextureManager.h"
 
 class Checkbox : public UIElement {
 private:

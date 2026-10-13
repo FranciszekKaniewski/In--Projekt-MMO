@@ -6,13 +6,13 @@
 
 #include "../Vendor/SDL2/include/SDL2/SDL.h"
 #include "../Core/App.h"
-#include "./Label.h"
+#include "./elements/Label.h"
 #include "./UIBackground.h"
-#include "./Button.h"
-#include "./Input.h"
-#include "./Slider.h"
-#include "./Checkbox.h"
-#include "./Select.h"
+#include "./elements/Button.h"
+#include "./elements/Input.h"
+#include "./elements/Slider.h"
+#include "./elements/Checkbox.h"
+#include "./elements/Select.h"
 
 class UIBox{
 private:
