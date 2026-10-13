@@ -22,7 +22,8 @@ static bool quitReceived = false;
 
 // Exercise the actual main loop with a scene that measures rendering and updates.
 class FrameTimingScene : public Scene {
-    const int limits[5] = {30, 60, 120, 144, 240};
+    static constexpr int limitCount = 9;
+    const int limits[limitCount] = {1, 5, 10, 30, 60, 120, 144, 240, 5};
     const double frequency = static_cast<double>(SDL_GetPerformanceFrequency());
     int phase = 0;
     int frames = 0;
@@ -47,7 +48,8 @@ public:
 
     void render(App& app) override {
         require(!finished, "Main loop rendered again after SDL_QUIT");
-        require(updatesSinceRender <= 5, "A stalled frame caused too many catch-up updates");
+        if(app.settings.fpsLimit == 0 || app.settings.fpsLimit >= 30)
+            require(updatesSinceRender <= 5, "A stalled frame caused too many catch-up updates");
         const int frameUpdates = updatesSinceRender;
         updatesSinceRender = 0;
         SDL_SetRenderDrawColor(App::renderer, 0, 0, 0, 255);
@@ -62,7 +64,7 @@ public:
         }
         const double elapsed = (now - phaseStart) / frequency;
 
-        if(phase < 5) {
+        if(phase < limitCount) {
             ++frames;
             if(elapsed < 2.1) return;
             const double fps = (frames - 1) / elapsed;
@@ -79,7 +81,7 @@ public:
             phaseStart = now;
             frames = 1;
             updates = 0;
-            app.settings.fpsLimit = phase < 5 ? limits[phase] : 60;
+            app.settings.fpsLimit = phase < limitCount ? limits[phase] : 60;
             return;
         }
 

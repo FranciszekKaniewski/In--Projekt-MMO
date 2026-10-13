@@ -12,7 +12,6 @@ int main(int argv, char** args) {
 
     const Uint64 timerFrequency = SDL_GetPerformanceFrequency();
     const double fixedTimeStep = 1.0 / 60.0;
-    const int maxUpdatesPerFrame = 5;
     double lag = 0.0;
     Uint64 lastTime = SDL_GetPerformanceCounter();
     Uint64 fpsTimer = lastTime;
@@ -24,6 +23,12 @@ int main(int argv, char** args) {
         const double elapsed = static_cast<double>(frameStart - lastTime) / timerFrequency;
         lastTime = frameStart;
         lag += elapsed;
+
+        // Low FPS caps need more fixed steps; allow one spare for timing jitter.
+        const int maxUpdatesPerFrame = std::max(5, app.settings.fpsLimit > 0
+            ? static_cast<int>(std::ceil(
+                1.0 / (app.settings.fpsLimit * fixedTimeStep))) + 1
+            : 5);
 
         app.handleEvents();
         if(!app.isRunning) break;
