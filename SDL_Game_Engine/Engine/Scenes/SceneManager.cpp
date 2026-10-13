@@ -2,13 +2,26 @@
 #include <memory>
 #include <utility>
 
+namespace {
+struct ScopedFlag {
+    bool& flag;
+    bool previous;
+
+    explicit ScopedFlag(bool& flag) : flag(flag), previous(std::exchange(flag, true)) {}
+    ~ScopedFlag() { flag = previous; }
+};
+}
+
 void SceneManager::changeScene(std::function<Scene*()> factory, App& app) {
-    if (processingScene) {
+    if (processingScene || changingScene) {
         pendingSceneFactory = std::move(factory);
         hasPendingSceneChange = true;
         return;
     }
 
+    pendingSceneFactory = {};
+    hasPendingSceneChange = false;
+    const ScopedFlag guard(changingScene);
     destroyScene(app);
 
     if (factory) {
@@ -24,8 +37,6 @@ void SceneManager::closeScene(App& app) {
 }
 
 void SceneManager::destroyScene(App& app) {
-    pendingSceneFactory = {};
-    hasPendingSceneChange = false;
     std::unique_ptr<Scene> scene(std::exchange(activeScene, nullptr));
     if(scene) scene->onExit(app);
 }
@@ -42,6 +53,8 @@ void SceneManager::handleEvents(App& app, SDL_Event& event) {
 }
 
 void SceneManager::update(App& app) {
+    // Lifecycle callbacks may queue a transition even when no scene is active.
+    applyPendingSceneChange(app);
     if (!activeScene) return;
 
     processingScene = true;
@@ -62,7 +75,7 @@ void SceneManager::render(App& app) {
 }
 
 void SceneManager::applyPendingSceneChange(App& app) {
-    if (!hasPendingSceneChange) return;
+    if (!hasPendingSceneChange || processingScene || changingScene) return;
 
     auto factory = std::move(pendingSceneFactory);
     hasPendingSceneChange = false;

@@ -238,7 +238,13 @@ public:
     SceneChangeTest(SceneChangeState& state, int phase, bool close)
         : state(state), phase(phase), close(close) {}
     ~SceneChangeTest() override { state.destroyed = true; }
-    void onExit(App&) override { state.exited = true; }
+    void onEnter(App& app) override {
+        if(phase == 3) requestChange(app);
+    }
+    void onExit(App& app) override {
+        if(phase == 4 || phase == 5) requestChange(app);
+        state.exited = true;
+    }
     void handleEvents(App& app, SDL_Event&) override {
         if(phase == 0) requestChange(app);
     }
@@ -251,7 +257,7 @@ public:
 };
 
 static void exerciseDeferredSceneChanges(App& app) {
-    for(int phase = 0; phase < 3; ++phase) {
+    for(int phase = 0; phase < 6; ++phase) {
         for(bool close : {false, true}) {
             SceneChangeState state;
             App::sceneManager->changeScene([&]() -> Scene* {
@@ -263,8 +269,25 @@ static void exerciseDeferredSceneChanges(App& app) {
                 App::sceneManager->handleEvents(app, event);
             } else if(phase == 1) {
                 app.update();
-            } else {
+            } else if(phase == 2) {
                 app.render();
+            } else if(phase == 3) {
+                require(state.continued && !state.exited && !state.destroyed &&
+                        !state.replacementCreated,
+                        "onEnter transition was not deferred until the next update");
+                app.update();
+            } else {
+                if(phase == 4) {
+                    App::sceneManager->changeScene([]() -> Scene* { return new UIScene(); }, app);
+                } else {
+                    App::sceneManager->closeScene(app);
+                }
+                require(state.continued && state.exited && state.destroyed &&
+                        !state.replacementCreated,
+                        "onExit transition was not deferred until the next update");
+                require((App::sceneManager->activeScene != nullptr) == (phase == 4),
+                        "onExit transition replaced the outer transition too early");
+                app.update();
             }
             require(state.continued && state.exited && state.destroyed,
                     "Pending scene transition was not applied after the method returned");
@@ -488,7 +511,7 @@ int main() {
             }
             shutdownBaseline.check("Injected initialization failure");
         }
-        std::printf("PASS: 300 scene transitions, deferred scene changes/closure, "
+        std::printf("PASS: 300 scene transitions, deferred scene changes/closure including onEnter/onExit, "
                     "FPS settings/developer overlay, UI/text/PNG/font updates, repeated init, "
                     "WAV/OGG playback, pause/resume, volume/mute, exhausted channels, "
                     "cleanup, destructors and 7 startup failure paths; "

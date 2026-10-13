@@ -20,6 +20,7 @@ public:
 
 private:
     bool processingScene = false;
+    bool changingScene = false;
     bool hasPendingSceneChange = false;
     std::function<Scene*()> pendingSceneFactory;
 
