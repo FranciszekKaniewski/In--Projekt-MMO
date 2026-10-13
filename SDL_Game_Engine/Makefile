@@ -29,7 +29,7 @@ build:
 	if not exist "build\Assets" mkdir "build\Assets"
 	xcopy /E /I /H /Y "Game\assets\" "build\Assets\"
 	if not exist "build\Config" mkdir "build\Config"
-	xcopy /E /I /H /Y "Game\Config\" "build\Config\"
+	if not exist "build\Config\settings.json" copy /Y "Game\Config\settings.json" "build\Config\settings.json"
 	g++ -static -static-libstdc++ -I $(INCLUDE_DIR) -I $(VENDOR_H_FILES) -I $(GENERAL_H_FILES) -I $(GAME_H_FILES) -I $(SPEC_H_FILES) -I $(ECS_H_FILES) -I $(ECS_SPEC_H_FILES) -I $(GAME_SCRIPTS_FILES) -L $(LIB_DIR) -o ./build/$(OUT_NAME) $(GENERAL_CPP_FILES) $(SPEC_CPP_FILES) $(GAME_CPP_FILES) $(MAIN_CPP_FILES) $(DLL_FILES) \
 	-lsetupapi -lversion -limm32 -lole32 -loleaut32 -lwinmm -lgdi32 -luser32 -lshell32 -ladvapi32 -lRpcrt4
 

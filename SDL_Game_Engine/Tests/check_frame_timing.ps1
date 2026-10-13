@@ -2,13 +2,14 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
-    New-Item -ItemType Directory -Force build | Out-Null
-    Copy-Item -Recurse -Force Game/Assets build
-    Copy-Item -Recurse -Force Game/Config build
+    $testRoot = Join-Path $projectRoot 'build/tests/frame-timing'
+    New-Item -ItemType Directory -Force $testRoot | Out-Null
+    Copy-Item -Recurse -Force Game/Assets $testRoot
+    Copy-Item -Recurse -Force Game/Config $testRoot
     $compilerArgs = @(
         '-std=c++17', '-g', '-static', '-static-libstdc++',
         '-I', 'Engine/Vendor/SDL2/include/SDL2', '-L', 'Engine/Vendor/SDL2/lib',
-        '-o', 'build/frame_timing.exe', 'Tests/FrameTiming.cpp',
+        '-o', 'build/tests/frame-timing/frame_timing.exe', 'Tests/FrameTiming.cpp',
         'Engine/Core/App.cpp', 'Engine/Audio/AudioManager.cpp',
         'Engine/Renderer/TextureManager.cpp', 'Engine/Scenes/SceneManager.cpp',
         '-Wl,--wrap=SDL_CreateRenderer',
@@ -18,7 +19,7 @@ try {
     )
     & g++ @compilerArgs
     if($LASTEXITCODE -ne 0) { throw 'Frame timing check compilation failed.' }
-    Push-Location build
+    Push-Location $testRoot
     try {
         & ./frame_timing.exe
         if($LASTEXITCODE -ne 0) { throw 'Frame timing check failed.' }

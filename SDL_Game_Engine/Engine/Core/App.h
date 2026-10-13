@@ -1,4 +1,5 @@
 #pragma once
+#include <filesystem>
 #include <string>
 #include <vector>
 #include "../Vendor/SDL2/include/SDL2/SDL.h"
@@ -71,6 +72,7 @@ public:
     bool setResolution(int width, int height);
     std::vector<WindowResolution> getAvailableResolutions() const;
 private:
+    std::filesystem::path configFilePath;
     Label* fpsLabel = nullptr;
     bool sdlInitialized = false;
     bool ttfInitialized = false;

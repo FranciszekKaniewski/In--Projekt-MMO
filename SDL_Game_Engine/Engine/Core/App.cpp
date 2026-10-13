@@ -26,9 +26,11 @@ App::~App() {
 void App::init(const char* configPath) {
     clean();
     AppConfig cfg;
+    std::filesystem::path loadedConfigPath;
 
     try {
-        cfg = loadConfig(configPath);
+        loadedConfigPath = std::filesystem::absolute(configPath);
+        cfg = loadConfig(loadedConfigPath);
     } catch (const std::exception& e) {
         std::cerr << "Blad ladowania konfiguracji: " << e.what() << std::endl;
         isRunning = false;
@@ -36,6 +38,8 @@ void App::init(const char* configPath) {
     }
 
     this->title = cfg.window.title;
+    settings.volume = std::clamp(cfg.audio.volume, 0, 100);
+    settings.muted = cfg.audio.muted;
     settings.fpsLimit = std::max(0, cfg.game.fps);
     devMode = cfg.game.devMode;
     currentFPS = 0;
@@ -131,6 +135,8 @@ void App::init(const char* configPath) {
     sceneManager = new SceneManager();
     isRunning = true;
     sceneManager->changeScene(createScene1, *this);
+    // Failed initialization must never overwrite the configuration.
+    configFilePath = std::move(loadedConfigPath);
 }
 
 void App::update() {
@@ -347,6 +353,22 @@ void App::clean() {
         delete sceneManager;
         sceneManager = nullptr;
     }
+
+    if (!configFilePath.empty()) {
+        try {
+            syncDisplaySettings();
+            const AppConfig cfg = {
+                {title, settings.width, settings.height, settings.fullscreen},
+                {std::max(0, settings.fpsLimit), devMode},
+                {std::clamp(settings.volume, 0, 100), settings.muted}
+            };
+            saveConfig(configFilePath, cfg);
+        } catch (const std::exception& e) {
+            std::cerr << "Blad zapisu ustawien: " << e.what() << std::endl;
+        }
+        configFilePath.clear();
+    }
+
     delete fpsLabel;
     fpsLabel = nullptr;
     audio.clear();

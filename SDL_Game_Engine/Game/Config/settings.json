@@ -8,5 +8,9 @@
   "game": {
     "fps": 60,
     "devMode": true
+  },
+  "audio": {
+    "volume": 100,
+    "muted": false
   }
 }

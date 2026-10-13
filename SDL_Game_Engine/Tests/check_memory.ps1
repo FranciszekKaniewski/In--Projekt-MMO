@@ -2,13 +2,14 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
-    New-Item -ItemType Directory -Force build | Out-Null
-    Copy-Item -Recurse -Force Game/Assets build
-    Copy-Item -Recurse -Force Game/Config build
+    $testRoot = Join-Path $projectRoot 'build/tests/memory'
+    New-Item -ItemType Directory -Force $testRoot | Out-Null
+    Copy-Item -Recurse -Force Game/Assets $testRoot
+    Copy-Item -Recurse -Force Game/Config $testRoot
     $compilerArgs = @(
         '-std=c++17', '-g', '-static', '-static-libstdc++',
         '-I', 'Engine/Vendor/SDL2/include/SDL2', '-L', 'Engine/Vendor/SDL2/lib',
-        '-o', 'build/memory_leaks.exe', 'Tests/MemoryLeaks.cpp',
+        '-o', 'build/tests/memory/memory_leaks.exe', 'Tests/MemoryLeaks.cpp',
         'Engine/Core/App.cpp', 'Engine/Audio/AudioManager.cpp',
         'Engine/Renderer/TextureManager.cpp',
         'Engine/Scenes/SceneManager.cpp', 'Game/Scenes/Scene1.cpp',
@@ -21,7 +22,7 @@ try {
     )
     & g++ @compilerArgs
     if($LASTEXITCODE -ne 0) { throw 'Memory check compilation failed.' }
-    Push-Location build
+    Push-Location $testRoot
     try {
         & ./memory_leaks.exe
         if($LASTEXITCODE -ne 0) { throw 'Memory check failed.' }

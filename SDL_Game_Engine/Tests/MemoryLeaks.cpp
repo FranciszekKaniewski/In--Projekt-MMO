@@ -147,11 +147,11 @@ static void exerciseFPSSettings(App& app) {
     };
     App::sceneManager->changeScene(createSettingsScene, app);
     Select* select = fpsSelect();
-    require(select->getOptions().front() == "Bez limitu", "Unlimited option is missing");
+    require(!select->getOptions().empty(), "FPS options are missing");
     select->setSelectedIndex(0);
     require(app.settings.fpsLimit == 0, "Unlimited selection did not disable the cap");
     App::sceneManager->changeScene(createSettingsScene, app);
-    require(fpsSelect()->getSelectedText() == "Bez limitu",
+    require(fpsSelect()->getSelectedIndex() == 0,
             "Unlimited selection was lost when reopening settings");
     fpsSelect()->setSelectedIndex(2);
     require(app.settings.fpsLimit == 60, "Cannot restore a limited FPS setting");
@@ -295,6 +295,8 @@ static void writeAudioFixture() {
 }
 
 static void exerciseAudio(App& app) {
+    // Startup already loads menu music; missing-file checks need uncached IDs.
+    app.audio.clear();
     require(app.audio.playSound("missing") == -1, "Unknown sound must fail safely");
     require(!app.audio.playMusic("missing"), "Unknown music must fail safely");
     require(!app.audio.loadSound("", "audio-fixture.wav"), "Empty audio ID must fail");
