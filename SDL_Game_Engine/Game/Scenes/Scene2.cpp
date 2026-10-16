@@ -1,8 +1,8 @@
-#include "../../Engine/Scenes/UIScene.h"
+#include "../../Engine/Scenes/GameScene.h"
 
-class UIScene2 : public UIScene {
+class Scene2 : public GameScene {
 public:
-    UIScene2(SDL_Color color, const std::string& backgroundImage = "") : UIScene(color, backgroundImage) {}
+    Scene2() : GameScene() {}
 
     void onEnter(App& app) override {
         std::cout << "Entering Scene 2!" << std::endl;
@@ -10,5 +10,5 @@ public:
 };
 
 Scene* createScene2() {
-    return new UIScene2({100, 100, 255, 255}, "assets/UI/MainMenuBG2.png");
+    return new Scene2();
 }
