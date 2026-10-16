@@ -1,27 +1,45 @@
 # Testy silnika
 
-Projekt ma dwa testy integracyjne/regresyjne: bilansu pamięci i działania pętli głównej.
-Używają kodu silnika oraz bibliotek SDL, a błędy zgłaszają przez asercje `require()` i niezerowy kod wyjścia.
-Oba uruchamiają SDL z driverami `dummy` i rendererem programowym, więc nie wymagają otwierania okna ani fizycznego urządzenia audio.
+Projekt ma testy wektora `math::Vector2` oraz dwa testy integracyjne/regresyjne:
+bilansu pamięci i działania pętli głównej. Błędy są zgłaszane komunikatem `FAIL` i niezerowym kodem wyjścia.
+Testy pamięci i timingu uruchamiają SDL z driverami `dummy` i rendererem programowym,
+więc nie wymagają otwierania okna ani fizycznego urządzenia audio. Test Vector2 nie wymaga SDL.
 
 ## Uruchamianie
 
-Wymagania: Windows, PowerShell, `g++` z obsługą C++17 w `PATH` i biblioteki dostarczone w `Engine/Vendor`.
-Z katalogu projektu uruchom kolejno:
+Wymagania: Windows, GNU Make 4.4 lub nowszy oraz `g++` z obsługą C++17 w `PATH`.
+Testy pamięci i timingu wymagają też bibliotek dostarczonych w `Engine/Vendor`.
+Z katalogu projektu uruchom cały zestaw:
 
-```powershell
-.\Tests\check_memory.ps1
-.\Tests\check_frame_timing.ps1
+```shell
+make test
 ```
 
-Każdy skrypt kompiluje własny plik `.exe`, kopiuje zasoby i konfigurację do `build/tests`,
-a następnie uruchamia test w przygotowanym katalogu. Przy błędzie kompilacji lub testu skrypt zgłasza wyjątek.
-Test timingu uruchamiaj osobno, bez równoległego budowania projektu i innych intensywnych zadań.
+Pojedynczy zestaw testów uruchomisz przez `make test-vector2`, `make test-memory`
+lub `make test-frame-timing`. Każdy cel kompiluje własny plik `.exe` w `build/tests`,
+a następnie go uruchamia. Testy pamięci i timingu dodatkowo kopiują tam zasoby oraz konfigurację.
 
-| Test | Źródło | Skrypt | Katalog roboczy |
+`make test` wykonuje zestawy w kolejności: Vector2, pamięć, timing. Zachowuje tę kolejność
+także przy `make -j test`. Błąd kompilacji lub testu kończy polecenie niezerowym kodem.
+Aby kontynuować pozostałe zestawy po błędzie, użyj `make -k test`.
+Podczas testu timingu unikaj osobnego równoległego budowania projektu i innych intensywnych zadań.
+
+| Test | Źródło | Polecenie | Katalog roboczy |
 |---|---|---|---|
-| Pamięć i własność zasobów | [MemoryLeaks.cpp](MemoryLeaks.cpp) | [check_memory.ps1](check_memory.ps1) | `build/tests/memory` |
-| FPS i aktualizacje logiki | [FrameTiming.cpp](FrameTiming.cpp) | [check_frame_timing.ps1](check_frame_timing.ps1) | `build/tests/frame-timing` |
+| Wektor i obliczenia ruchu | [Vector2.cpp](Vector2.cpp) | `make test-vector2` | `build/tests/vector2` |
+| Pamięć i własność zasobów | [MemoryLeaks.cpp](MemoryLeaks.cpp) | `make test-memory` | `build/tests/memory` |
+| FPS i aktualizacje logiki | [FrameTiming.cpp](FrameTiming.cpp) | `make test-frame-timing` | `build/tests/frame-timing` |
+
+## Vector2 — działania matematyczne
+
+Uruchom `make test-vector2`. Cel kompiluje test w C++17 z ostrzeżeniami
+traktowanymi jako błędy. Nie wymaga SDL, ECS ani zewnętrznego frameworka testowego.
+
+Dziewięć nazwanych testów sprawdza konstrukcję, operatory bez modyfikacji argumentów,
+operatory przypisania, długość i iloczyn skalarny, normalizację zwykłego i zerowego wektora,
+normalizację bardzo dużych i małych wartości, odrzucanie dzielenia przez zero oraz ruch z `deltaTime`.
+Wyniki `float` są porównywane z tolerancją. Każdy test wypisuje `PASS` albo `FAIL`;
+pozostałe testy wykonują się także po błędzie. Końcowy kod wyjścia to `0` przy powodzeniu i `1` przy błędzie.
 
 ## 1. MemoryLeaks — pamięć i cykl życia
 
