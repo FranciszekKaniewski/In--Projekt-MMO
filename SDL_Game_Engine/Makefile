@@ -1,4 +1,4 @@
-.PHONY: build run bar test test-vector2 test-memory test-frame-timing
+.PHONY: build run bar test test-vector2 test-velocity test-collider test-memory test-frame-timing
 
 # Run the suite sequentially, including with make -j test.
 .NOTPARALLEL: test
@@ -51,13 +51,29 @@ TEST_ENGINE_SOURCES := $(GENERAL_CPP_FILES) $(SPEC_CPP_FILES)
 TEST_SDL_LIBS := -lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf
 TEST_WINDOWS_LIBS := -lsetupapi -lversion -limm32 -lole32 -loleaut32 -lwinmm -lgdi32 -luser32 -lshell32 -ladvapi32 -lRpcrt4
 
-test: test-vector2 test-memory test-frame-timing
+test: test-vector2 test-velocity test-collider test-memory test-frame-timing
 
 test-vector2:
 	@echo "Testing Vector2..."
 	@if not exist "build\tests\vector2" mkdir "build\tests\vector2"
 	$(CXX) $(TEST_CXXFLAGS) -Wall -Wextra -Wpedantic -Werror -o build/tests/vector2/vector2_tests.exe Tests/Vector2.cpp
 	@build\tests\vector2\vector2_tests.exe
+
+test-velocity:
+	@echo "Testing velocity sources..."
+	@if not exist "build\tests\velocity" mkdir "build\tests\velocity"
+	$(CXX) $(TEST_CXXFLAGS) -Wall -Wextra -Wpedantic -Werror \
+		-o build/tests/velocity/velocity_tests.exe Tests/Velocity.cpp Engine/ECS/ECS.cpp
+	@build\tests\velocity\velocity_tests.exe
+
+test-collider:
+	@echo "Testing collider outlines..."
+	@if not exist "build\tests\collider" mkdir "build\tests\collider"
+	$(CXX) $(TEST_CXXFLAGS) $(TEST_SDL_FLAGS) -Wall -Wextra -Wpedantic -Werror \
+		-o build/tests/collider/collider_tests.exe Tests/Collider.cpp \
+		Engine/ECS/ECS.cpp Engine/Renderer/ColliderDebugRenderer.cpp \
+		-lmingw32 -lSDL2 $(TEST_WINDOWS_LIBS)
+	@build\tests\collider\collider_tests.exe
 
 test-memory:
 	@echo "Testing memory and resource ownership..."

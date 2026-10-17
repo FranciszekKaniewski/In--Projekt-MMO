@@ -1,25 +1,26 @@
 # Testy silnika
 
-Projekt ma testy wektora `math::Vector2` oraz dwa testy integracyjne/regresyjne:
+Projekt ma testy wektora `math::Vector2`, prędkości, podglądu colliderów oraz dwa testy integracyjne/regresyjne:
 bilansu pamięci i działania pętli głównej. Błędy są zgłaszane komunikatem `FAIL` i niezerowym kodem wyjścia.
 Testy pamięci i timingu uruchamiają SDL z driverami `dummy` i rendererem programowym,
-więc nie wymagają otwierania okna ani fizycznego urządzenia audio. Test Vector2 nie wymaga SDL.
+więc nie wymagają otwierania okna ani fizycznego urządzenia audio. Test colliderów rysuje do powierzchni
+w pamięci bez otwierania okna. Testy Vector2 i Velocity nie wymagają SDL.
 
 ## Uruchamianie
 
 Wymagania: Windows, GNU Make 4.4 lub nowszy oraz `g++` z obsługą C++17 w `PATH`.
-Testy pamięci i timingu wymagają też bibliotek dostarczonych w `Engine/Vendor`.
+Testy colliderów, pamięci i timingu wymagają też bibliotek dostarczonych w `Engine/Vendor`.
 Z katalogu projektu uruchom cały zestaw:
 
 ```shell
 make test
 ```
 
-Pojedynczy zestaw testów uruchomisz przez `make test-vector2`, `make test-memory`
+Pojedynczy zestaw testów uruchomisz przez `make test-vector2`, `make test-velocity`, `make test-collider`, `make test-memory`
 lub `make test-frame-timing`. Każdy cel kompiluje własny plik `.exe` w `build/tests`,
 a następnie go uruchamia. Testy pamięci i timingu dodatkowo kopiują tam zasoby oraz konfigurację.
 
-`make test` wykonuje zestawy w kolejności: Vector2, pamięć, timing. Zachowuje tę kolejność
+`make test` wykonuje zestawy w kolejności: Vector2, Velocity, collidery, pamięć, timing. Zachowuje tę kolejność
 także przy `make -j test`. Błąd kompilacji lub testu kończy polecenie niezerowym kodem.
 Aby kontynuować pozostałe zestawy po błędzie, użyj `make -k test`.
 Podczas testu timingu unikaj osobnego równoległego budowania projektu i innych intensywnych zadań.
@@ -27,6 +28,8 @@ Podczas testu timingu unikaj osobnego równoległego budowania projektu i innych
 | Test | Źródło | Polecenie | Katalog roboczy |
 |---|---|---|---|
 | Wektor i obliczenia ruchu | [Vector2.cpp](Vector2.cpp) | `make test-vector2` | `build/tests/vector2` |
+| Sumowanie niezależnych prędkości | [Velocity.cpp](Velocity.cpp) | `make test-velocity` | `build/tests/velocity` |
+| Collidery i obrysy w trybie dev | [Collider.cpp](Collider.cpp) | `make test-collider` | `build/tests/collider` |
 | Pamięć i własność zasobów | [MemoryLeaks.cpp](MemoryLeaks.cpp) | `make test-memory` | `build/tests/memory` |
 | FPS i aktualizacje logiki | [FrameTiming.cpp](FrameTiming.cpp) | `make test-frame-timing` | `build/tests/frame-timing` |
 
@@ -41,7 +44,22 @@ normalizację bardzo dużych i małych wartości, odrzucanie dzielenia przez zer
 Wyniki `float` są porównywane z tolerancją. Każdy test wypisuje `PASS` albo `FAIL`;
 pozostałe testy wykonują się także po błędzie. Końcowy kod wyjścia to `0` przy powodzeniu i `1` przy błędzie.
 
-## 1. MemoryLeaks — pamięć i cykl życia
+## Velocity — niezależne źródła prędkości
+
+`make test-velocity` sprawdza sumowanie, zastępowanie i usuwanie nazwanych wektorów,
+zerową sumę pustego komponentu oraz znoszenie się przeciwnych prędkości.
+Test ECS sprawdza ruch z `deltaTime`, zachowanie źródeł prędkości i pomijanie nieruchomych encji.
+
+## Collidery — podgląd hitboxów
+
+`make test-collider` sprawdza piksele obrysów kwadratu, koła i wielokąta, brak wypełnienia,
+włączanie i wyłączanie trybu dev, pozycję i offset oraz podążanie hitboxa za encją.
+Sprawdza również wyłączone i niekompletne collidery, nieprawidłowe rozmiary oraz zachowanie
+koloru rysowania SDL. Wielokąty obejmują trójkąt, figurę wklęsłą, domknięcie obrysu,
+offset, ruch, walidację punktów oraz figurę o 128 wierzchołkach.
+Używa renderera programowego i nie wymaga zasobów gry.
+
+## MemoryLeaks — pamięć i cykl życia
 
 Test porównuje liczbę aktywnych alokacji z zapisaną wartością bazową:
 
@@ -72,7 +90,7 @@ Ta pojedyncza alokacja SDL należała już do bazy testu i nie przyrastała podc
 
 Test mierzy liczbę alokacji, nie RAM w MB ani pamięć GPU. Liczniki nie zastępują sanitizera wykrywającego błędny dostęp do pamięci.
 
-## 2. FrameTiming — FPS i stały krok logiki
+## FrameTiming — FPS i stały krok logiki
 
 Test uruchamia rzeczywistą pętlę z `main.cpp` z własną sceną pomiarową.
 Zmienia limit w trakcie działania: **1 → 5 → 10 → 30 → 60 → 120 → 144 → 240 → 5 FPS**,
