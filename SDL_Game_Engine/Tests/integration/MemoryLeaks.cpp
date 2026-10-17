@@ -1,9 +1,11 @@
+#include <catch_amalgamated.hpp>
+#include "../support/Measurements.h"
 #define SDL_MAIN_HANDLED
-#include "../Engine/Scenes/UIScene.h"
-#include "../Engine/Scenes/SceneManager.h"
-#include "../Engine/Vendor/SDL2/include/SDL2/SDL_image.h"
-#include "../Engine/Vendor/SDL2/include/SDL2/SDL_mixer.h"
-#include "../Engine/Vendor/SDL2/include/SDL2/SDL_test_memory.h"
+#include "../../Engine/Scenes/UIScene.h"
+#include "../../Engine/Scenes/SceneManager.h"
+#include <SDL_image.h>
+#include <SDL_mixer.h>
+#include <SDL_test_memory.h>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -104,6 +106,7 @@ struct Allocations {
     void check(const char* phase) const {
         const int remainingSDL = SDL_GetNumAllocations();
         const long long remainingCpp = cppAllocations.load();
+        test_report::recordMemory(phase, sdl, remainingSDL, cpp, remainingCpp);
         if(sdl != remainingSDL || cpp != remainingCpp) {
             std::fprintf(stderr, "%s: SDL %d -> %d, C++ %lld -> %lld\n",
                          phase, sdl, remainingSDL, cpp, remainingCpp);
@@ -414,113 +417,112 @@ static void exerciseUIOwnership(App& app) {
     // A scene manager going out of scope must also destroy its active UI scene.
 }
 
-int main() {
-    try {
-        require(SDLTest_TrackAllocations() == 0, "Cannot enable SDL allocation tracking");
-        SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
-        SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
-        SDL_setenv("SDL_RENDER_DRIVER", "", 1);
-        std::cout << "Memory regression check\n";
-        writeAudioFixture();
-        // Warm up runtime/library caches before recording the shutdown baseline.
-        {
-            App warmup;
-            warmup.init("Config/settings.json");
-            require(warmup.isRunning, "Warmup initialization failed");
-            SDL_RendererInfo info = {};
-            require(SDL_GetRendererInfo(App::renderer, &info) == 0 &&
-                    (info.flags & SDL_RENDERER_SOFTWARE),
-                    "Headless initialization must choose a software renderer");
-            exerciseScenes(warmup);
-            exerciseFPSSettings(warmup);
-            exerciseFPSOverlay(warmup);
-            exerciseDeferredSceneChanges(warmup);
-            exerciseUIOwnership(warmup);
-            exerciseAudio(warmup);
-            startAudioForCleanup(warmup);
-            warmup.clean();
-            requireClosed(warmup);
-        }
-        const Allocations shutdownBaseline;
-        {
-            App app;
-            app.init("Config/settings.json");
-            require(app.isRunning, "App initialization failed");
-            exerciseScenes(app);
-            exerciseFPSSettings(app);
-            exerciseFPSOverlay(app);
-            exerciseUIOwnership(app);
-            exerciseAudio(app);
-            emptyScene(app);
-            const Allocations sceneBaseline;
-            for(int i = 0; i < 100; ++i) {
-                exerciseScenes(app);
-                sceneBaseline.check("Scene transitions");
-            }
-            exerciseUIOwnership(app);
-            sceneBaseline.check("UI, texture and font ownership");
-            exerciseDeferredSceneChanges(app);
-            sceneBaseline.check("Deferred scene changes and closure");
-            exerciseFPSSettings(app);
-            exerciseFPSOverlay(app);
-            sceneBaseline.check("FPS settings and developer overlay");
-            startAudioForCleanup(app);
-            app.clean();
-            requireClosed(app);
-            require(!app.audio.loadMusic("closed", menuMusicPath),
-                    "Audio loading must fail after cleanup");
-            app.clean();
-            requireClosed(app);
-            app.update();
-            app.render();
-        }
-        shutdownBaseline.check("Explicit cleanup and destructor");
-        {
-            App app;
-            app.init("Config/settings.json");
-            require(app.isRunning, "Reinitialization failed");
-            startAudioForCleanup(app);
-            app.init("Config/settings.json");
-            require(app.isRunning, "Repeated initialization failed");
-            require(!app.audio.playMusic("cleanup.music") &&
-                    app.audio.playSound("cleanup.sound") == -1,
-                    "Repeated initialization retained old audio resources");
-            startAudioForCleanup(app);
-            // No explicit clean: App's destructor must release everything.
-        }
-        shutdownBaseline.check("App destructor and repeated initialization");
-        {
-            App app;
-            app.init("Config/does-not-exist.json");
-            requireClosed(app);
-            SDL_setenv("SDL_AUDIODRIVER", "does-not-exist", 1);
-            app.init("Config/settings.json");
-            requireClosed(app);
-            SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
-        }
-        shutdownBaseline.check("Failed initialization");
-        for(Failure injected : {Failure::SDL, Failure::Window, Failure::Renderer,
-                                Failure::Font, Failure::Image, Failure::Mixer, Failure::Audio}) {
-            {
-                App app;
-                failure = injected;
-                app.init("Config/settings.json");
-                failure = Failure::None;
-                requireClosed(app);
-                app.clean();
-            }
-            shutdownBaseline.check("Injected initialization failure");
-        }
-        std::printf("PASS: 300 scene transitions, deferred scene changes/closure including onEnter/onExit, "
-                    "FPS settings/developer overlay, UI/text/PNG/font updates, repeated init, "
-                    "WAV/OGG playback, pause/resume, volume/mute, exhausted channels, "
-                    "cleanup, destructors and 7 startup failure paths; "
-                    "SDL=%d, C++=%lld (unchanged baseline).\n",
-                    shutdownBaseline.sdl, shutdownBaseline.cpp);
-        return 0;
-    } catch(const std::exception& error) {
-        std::fprintf(stderr, "FAIL: %s\n", error.what());
-        SDLTest_LogAllocations();
-        return 1;
+static void exerciseMemoryRegression() {
+    require(SDLTest_TrackAllocations() == 0, "Cannot enable SDL allocation tracking");
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
+    SDL_setenv("SDL_RENDER_DRIVER", "", 1);
+    std::cout << "Memory regression check\n";
+    writeAudioFixture();
+    // Warm up runtime/library caches before recording the shutdown baseline.
+    {
+        App warmup;
+        warmup.init("Config/settings.json");
+        require(warmup.isRunning, "Warmup initialization failed");
+        SDL_RendererInfo info = {};
+        require(SDL_GetRendererInfo(App::renderer, &info) == 0 &&
+                (info.flags & SDL_RENDERER_SOFTWARE),
+                "Headless initialization must choose a software renderer");
+        exerciseScenes(warmup);
+        exerciseFPSSettings(warmup);
+        exerciseFPSOverlay(warmup);
+        exerciseDeferredSceneChanges(warmup);
+        exerciseUIOwnership(warmup);
+        exerciseAudio(warmup);
+        startAudioForCleanup(warmup);
+        warmup.clean();
+        requireClosed(warmup);
     }
+    const Allocations shutdownBaseline;
+    {
+        App app;
+        app.init("Config/settings.json");
+        require(app.isRunning, "App initialization failed");
+        exerciseScenes(app);
+        exerciseFPSSettings(app);
+        exerciseFPSOverlay(app);
+        exerciseUIOwnership(app);
+        exerciseAudio(app);
+        emptyScene(app);
+        const Allocations sceneBaseline;
+        for(int i = 0; i < 100; ++i) {
+            exerciseScenes(app);
+            sceneBaseline.check("Scene transitions");
+        }
+        exerciseUIOwnership(app);
+        sceneBaseline.check("UI, texture and font ownership");
+        exerciseDeferredSceneChanges(app);
+        sceneBaseline.check("Deferred scene changes and closure");
+        exerciseFPSSettings(app);
+        exerciseFPSOverlay(app);
+        sceneBaseline.check("FPS settings and developer overlay");
+        startAudioForCleanup(app);
+        app.clean();
+        requireClosed(app);
+        require(!app.audio.loadMusic("closed", menuMusicPath),
+                "Audio loading must fail after cleanup");
+        app.clean();
+        requireClosed(app);
+        app.update();
+        app.render();
+    }
+    shutdownBaseline.check("Explicit cleanup and destructor");
+    {
+        App app;
+        app.init("Config/settings.json");
+        require(app.isRunning, "Reinitialization failed");
+        startAudioForCleanup(app);
+        app.init("Config/settings.json");
+        require(app.isRunning, "Repeated initialization failed");
+        require(!app.audio.playMusic("cleanup.music") &&
+                app.audio.playSound("cleanup.sound") == -1,
+                "Repeated initialization retained old audio resources");
+        startAudioForCleanup(app);
+        // No explicit clean: App's destructor must release everything.
+    }
+    shutdownBaseline.check("App destructor and repeated initialization");
+    {
+        App app;
+        app.init("Config/does-not-exist.json");
+        requireClosed(app);
+        SDL_setenv("SDL_AUDIODRIVER", "does-not-exist", 1);
+        app.init("Config/settings.json");
+        requireClosed(app);
+        SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
+    }
+    shutdownBaseline.check("Failed initialization");
+    for(Failure injected : {Failure::SDL, Failure::Window, Failure::Renderer,
+                            Failure::Font, Failure::Image, Failure::Mixer, Failure::Audio}) {
+        {
+            App app;
+            failure = injected;
+            app.init("Config/settings.json");
+            failure = Failure::None;
+            requireClosed(app);
+            app.clean();
+        }
+        shutdownBaseline.check("Injected initialization failure");
+    }
+    std::printf("PASS: 300 scene transitions, deferred scene changes/closure including onEnter/onExit, "
+                "FPS settings/developer overlay, UI/text/PNG/font updates, repeated init, "
+                "WAV/OGG playback, pause/resume, volume/mute, exhausted channels, "
+                "cleanup, destructors and 7 startup failure paths; "
+                "SDL=%d, C++=%lld (unchanged baseline).\n",
+                shutdownBaseline.sdl, shutdownBaseline.cpp);
+}
+
+TEST_CASE("Resource lifecycle", "[integration][memory]") {
+    // Catch2 reports the scenario after all allocation snapshots are complete.
+    // Inner checks throw without calling the framework inside a measured region.
+    REQUIRE_NOTHROW(exerciseMemoryRegression());
 }

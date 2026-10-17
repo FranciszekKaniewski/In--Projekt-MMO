@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "../Vendor/SDL2/include/SDL2/SDL_ttf.h"
+#include <SDL_ttf.h>
 
 class Font {
 private:

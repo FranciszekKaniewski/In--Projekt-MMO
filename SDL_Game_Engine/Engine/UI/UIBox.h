@@ -4,7 +4,7 @@
 #include <functional>
 #include <utility>
 
-#include "../Vendor/SDL2/include/SDL2/SDL.h"
+#include <SDL.h>
 #include "../Core/App.h"
 #include "./elements/Label.h"
 #include "./UIBackground.h"

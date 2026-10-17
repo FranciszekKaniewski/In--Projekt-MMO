@@ -1,48 +1,139 @@
 # Testy silnika
 
-Projekt ma testy wektora `math::Vector2`, prędkości, podglądu colliderów oraz dwa testy integracyjne/regresyjne:
-bilansu pamięci i działania pętli głównej. Błędy są zgłaszane komunikatem `FAIL` i niezerowym kodem wyjścia.
-Testy pamięci i timingu uruchamiają SDL z driverami `dummy` i rendererem programowym,
-więc nie wymagają otwierania okna ani fizycznego urządzenia audio. Test colliderów rysuje do powierzchni
-w pamięci bez otwierania okna. Testy Vector2 i Velocity nie wymagają SDL.
+Testy używają Catch2 ze wspólnego katalogu **Vendor**. Makefile kompiluje i uruchamia trzy programy.
+Raportowanie realizuje listener Catch2 w support/Report.cpp; Makefile nie parsuje tekstu ani XML.
+
+## Podział
+
+| Katalog | Zestawy | Zakres |
+|---|---|---|
+| unit | Vector2, Velocity | Matematyka i prędkości, bez SDL i plików |
+| integration | Collider, MemoryLeaks | Renderer programowy SDL, ECS, sceny, UI, audio i własność zasobów |
+| e2e | FrameTiming | Rzeczywista pętla z main.cpp, testowa scena, limity FPS, logika i SDL_QUIT |
+| support | Report.cpp, Measurements.h | Wspólny runner, JSON i bufory pomiarów |
+
+Obecnie jest **25 przypadków Catch2**: 14 unit, 10 integration i 1 e2e.
+Asercje są liczone osobno. Scenariusz pamięci obejmujący 300 przejść scen jest jednym przypadkiem.
+
+Wszystkie biblioteki są w katalogu projektu: Vendor/SDL2, Vendor/nlohmann, Vendor/Catch2.
+Testy SDL działają bez okna i urządzenia audio, na driverach dummy.
+Test e2e podmienia scenę na pomiarową; sprawdzenie wyglądu gry i fizycznych urządzeń wymaga osobnego przebiegu.
 
 ## Uruchamianie
 
-Wymagania: Windows, GNU Make 4.4 lub nowszy oraz `g++` z obsługą C++17 w `PATH`.
-Testy colliderów, pamięci i timingu wymagają też bibliotek dostarczonych w `Engine/Vendor`.
-Z katalogu projektu uruchom cały zestaw:
+Wymagania: Windows, GNU Make 4.4+ i MinGW g++ z C++17 w PATH. Zależności są lokalne;
+nie potrzeba CMake, CTest, PowerShell ani pobierania pakietów.
 
-```shell
-make test
-```
+**make test** uruchamia wszystkie kategorie kolejno, także po niepowodzeniu pojedynczego testu.
+Na końcu drukuje liczbę zaliczonych, niezaliczonych i pominiętych przypadków oraz zapisuje zbiorczy JSON.
+Niezerowy kod oznacza błąd testu, kompilacji, raportowania albo niekompletny przebieg.
 
-Pojedynczy zestaw testów uruchomisz przez `make test-vector2`, `make test-velocity`, `make test-collider`, `make test-memory`
-lub `make test-frame-timing`. Każdy cel kompiluje własny plik `.exe` w `build/tests`,
-a następnie go uruchamia. Testy pamięci i timingu dodatkowo kopiują tam zasoby oraz konfigurację.
+**make test-unit**, **make test-integration** i **make test-e2e** uruchamiają wybraną kategorię.
+Zachowane skróty: make test-vector2, make test-velocity, make test-collider,
+make test-memory i make test-frame-timing.
 
-`make test` wykonuje zestawy w kolejności: Vector2, Velocity, collidery, pamięć, timing. Zachowuje tę kolejność
-także przy `make -j test`. Błąd kompilacji lub testu kończy polecenie niezerowym kodem.
-Aby kontynuować pozostałe zestawy po błędzie, użyj `make -k test`.
-Podczas testu timingu unikaj osobnego równoległego budowania projektu i innych intensywnych zadań.
+Catch2 i kod raportowania kompilują się raz do wspólnych obiektów.
+Programy kategorii są przebudowywane po zmianach źródeł lub nagłówków.
+Nie uruchamiaj kilku poleceń testowych jednocześnie w tym samym katalogu.
+Podczas pomiaru FPS unikaj innych intensywnych zadań.
 
-| Test | Źródło | Polecenie | Katalog roboczy |
-|---|---|---|---|
-| Wektor i obliczenia ruchu | [Vector2.cpp](Vector2.cpp) | `make test-vector2` | `build/tests/vector2` |
-| Sumowanie niezależnych prędkości | [Velocity.cpp](Velocity.cpp) | `make test-velocity` | `build/tests/velocity` |
-| Collidery i obrysy w trybie dev | [Collider.cpp](Collider.cpp) | `make test-collider` | `build/tests/collider` |
-| Pamięć i własność zasobów | [MemoryLeaks.cpp](MemoryLeaks.cpp) | `make test-memory` | `build/tests/memory` |
-| FPS i aktualizacje logiki | [FrameTiming.cpp](FrameTiming.cpp) | `make test-frame-timing` | `build/tests/frame-timing` |
+## out.json i dane do wykresów
+
+Każdy wykonany **TEST_CASE** tworzy własny plik out.json. Wszystkie pliki są w ignorowanym katalogu build.
+
+| Plik | Zawartość |
+|---|---|
+| build/tests/out.json | Wynik ostatniego pełnego polecenia make test, podsumowanie i wszystkie kategorie |
+| build/tests/unit/out.json | Wyniki ostatniego uruchomienia unit |
+| build/tests/integration/out.json | Wyniki ostatniego uruchomienia integration |
+| build/tests/e2e/out.json | Wyniki ostatniego uruchomienia e2e |
+| build/tests/unit/Vector2/construction/out.json | Przykładowy raport jednego przypadku |
+| build/tests/integration/MemoryLeaks/resource-lifecycle/out.json | Próbki alokacji i wynik scenariusza pamięci |
+| build/tests/e2e/FrameTiming/main-loop-timing-and-shutdown/out.json | Pomiary pętli aplikacji |
+
+Wspólny format ma schema_version: 1. Raport przypadku zawiera:
+
+- name, suite, category, tags i lokalizację źródła;
+- status (passed, failed lub skipped), duration_ms i liczbę asercji;
+- failures z komunikatem, wyrażeniem, wartościami i lokalizacją błędu;
+- measurements.memory: krok, faza, baza i bieżące liczniki SDL/C++, a także sdl_delta i cpp_delta;
+- measurements.frame_timing: limit i zmierzony FPS, current_fps, aktualizacje/s, czas etapu oraz liczbę klatek i aktualizacji;
+- measurements.truncated, informujące o przepełnieniu bufora próbek.
+
+duration_ms jest w milisekundach, duration_seconds w sekundach,
+a liczniki pamięci oznaczają liczbę aktywnych alokacji, nie bajty ani RAM.
+step to kolejność próbek od zera. Dane zapisują się przed sprawdzeniem progów,
+więc także nieudany etap FPS lub bilansu pamięci ma wartości do wykresu.
+Puste tablice oznaczają brak danego pomiaru w tym przypadku.
+limit_fps równy 0 oznacza pracę bez limitu FPS.
+
+Raport kategorii ma summary, assertions i tablicę tests.
+Raport zbiorczy ma summary, tablicę categories, complete i missing_categories.
+Przy błędzie kompilacji lub awarii procesu brakująca kategoria powoduje complete: false;
+runner nie dopisuje fikcyjnych zaliczonych testów.
+
+Pełne uruchomienie usuwa poprzednie raporty kategorii przed startem.
+Skrót dla jednego zestawu nadpisuje raport jego kategorii wynikami wyłącznie wybranych przypadków.
+Raport zbiorczy aktualizuje tylko make test; pliki pojedynczych przypadków zawierają ich ostatni zakończony przebieg.
+Raporty są nadpisywane. Do wykresów porównujących kilka uruchomień zachowaj ich kopie.
+
+Przykładowe pola do wykresów:
+
+- nazwa przypadku → duration_ms;
+- step → sdl_delta i cpp_delta (pożądany wynik po sprzątaniu: 0);
+- limit_fps → measured_fps i updates_per_second.
+
+## Nowe testy
+
+Dodaj plik .cpp w odpowiednim katalogu i oznacz przypadek kategorią oraz zestawem:
+
+~~~cpp
+#include <catch_amalgamated.hpp>
+#include "../../Engine/Math/Vector2.h"
+
+TEST_CASE("Adding velocities preserves direction", "[unit][vector2]") {
+    const math::Vector2 movement{10.0f, 0.0f};
+    const math::Vector2 wind{0.0f, 5.0f};
+
+    const auto result = movement + wind;
+
+    REQUIRE(result.x == Catch::Approx(10.0f).margin(0.00001f));
+    REQUIRE(result.y == Catch::Approx(5.0f).margin(0.00001f));
+}
+~~~
+
+Makefile zbiera pliki .cpp z unit, integration i e2e automatycznie.
+REQUIRE kończy bieżący przypadek po błędzie, CHECK kontynuuje asercje,
+a REQUIRE_THROWS_AS sprawdza typ wyjątku. Wyniki float porównuj z tolerancją.
+Dodatkowe źródła silnika lub biblioteki dopisz do odpowiedniego polecenia kompilacji.
+
+Każdy zwykły przypadek używa asercji Catch2. Test pamięci używa REQUIRE_NOTHROW wokół
+całego scenariusza: wewnątrz mierzonego regionu sprawdzenia rzucają wyjątek bez wywoływania frameworka,
+żeby raportowanie nie zmieniło bilansu. Próbki trafiają do stałych buforów, a JSON powstaje po zakończeniu pomiarów.
+
+Do ręcznego wyboru przypadku uruchom program z katalogu jego kategorii, np.:
+
+~~~shell
+cd build\tests\unit
+tests.exe --list-tests
+tests.exe "Construction"
+~~~
+
+Listener zapisuje out.json względem bieżącego katalogu, również przy takim uruchomieniu.
+
+Opis frameworka: [Catch2](https://github.com/catchorg/Catch2/blob/v3.8.1/docs/tutorial.md).
+
 
 ## Vector2 — działania matematyczne
 
 Uruchom `make test-vector2`. Cel kompiluje test w C++17 z ostrzeżeniami
-traktowanymi jako błędy. Nie wymaga SDL, ECS ani zewnętrznego frameworka testowego.
+traktowanymi jako błędy. Nie wymaga SDL ani ECS; używa lokalnej kopii Catch2.
 
 Dziewięć nazwanych testów sprawdza konstrukcję, operatory bez modyfikacji argumentów,
 operatory przypisania, długość i iloczyn skalarny, normalizację zwykłego i zerowego wektora,
 normalizację bardzo dużych i małych wartości, odrzucanie dzielenia przez zero oraz ruch z `deltaTime`.
-Wyniki `float` są porównywane z tolerancją. Każdy test wypisuje `PASS` albo `FAIL`;
-pozostałe testy wykonują się także po błędzie. Końcowy kod wyjścia to `0` przy powodzeniu i `1` przy błędzie.
+Wyniki `float` są porównywane z tolerancją. Catch2 podaje liczbę zaliczonych przypadków,
+a przy błędzie wskazuje niespełnioną asercję. Pozostałe przypadki wykonują się także po błędzie.
 
 ## Velocity — niezależne źródła prędkości
 
@@ -114,7 +205,7 @@ Górny panel porównuje limit z uzyskanym FPS; dolny pokazuje tempo logiki i dop
 Wartości pochodzą z testowej sceny na rendererze programowym. Wykres obejmuje tylko faktycznie wykonane etapy;
 wyniki zależą od maszyny i warunków uruchomienia.
 
-**W świeżym osobnym przebiegu test zakończył się `FAIL` przy 30 FPS:** uzyskał 25,49 FPS,
+**W przykładowym przebiegu z 13 października 2026 test zakończył się `FAIL` przy 30 FPS:** uzyskał 25,49 FPS,
 poniżej wymaganych 27 FPS, mimo prawidłowych 59,94 aktualizacji/s.
 Wykres pokazuje cztery wykonane etapy. Dalsze limity, zatrzymanie na 400 ms i tryb bez limitu
 nie zostały w tym przebiegu wykonane. Wcześniejszy pomiar równoległy także nie przeszedł progu 30 FPS;
@@ -122,8 +213,9 @@ ustalenie przyczyny powtarzającego się wyniku wymaga osobnej diagnozy.
 
 ## Jak czytać wynik
 
-- **`PASS:` i kod `0`** — wszystkie warunki danego testu zostały spełnione.
-- **`FAIL:` i kod `1`** — komunikat wskazuje pierwsze niespełnione sprawdzenie.
+- **`All tests passed` / `PASS:` i kod `0`** — wszystkie warunki zostały spełnione.
+- **`FAILED` / `FAIL:` i niezerowy kod** — log wskazuje niespełnioną asercję, wyjątek lub awarię procesu.
+- Scenariusze pamięci i timingu dodatkowo wypisują własne komunikaty `PASS:` / `FAIL:`.
 - W teście pamięci komunikaty o brakujących plikach lub wymuszonych błędach SDL są częścią scenariuszy negatywnych. O wyniku decyduje końcowe `PASS`/`FAIL`.
 - `Outstanding allocations changed` oznacza zmianę bilansu. Log podaje wartości SDL i C++ przed scenariuszem oraz po nim.
 - `Measured FPS does not match the selected limit` może wystąpić przy przeciążeniu komputera. Powtórz pomiar osobno; jeśli błąd się powtarza, sprawdź timing pętli.

@@ -1,10 +1,8 @@
-#include "../Engine/Math/Vector2.h"
+#include <catch_amalgamated.hpp>
+#include "../../Engine/Math/Vector2.h"
 
-#include <cmath>
-#include <iostream>
 #include <limits>
 #include <stdexcept>
-#include <string>
 
 using math::Vector2;
 
@@ -13,11 +11,8 @@ namespace {
 // Wyniki float porownujemy z tolerancja zamiast przez operator ==.
 void expectNear(float actual, float expected, const char* message) {
     constexpr float tolerance = 0.00001f;
-    if (!(std::abs(actual - expected) <= tolerance)) {
-        throw std::runtime_error(std::string(message)
-            + " Expected: " + std::to_string(expected)
-            + ", actual: " + std::to_string(actual));
-    }
+    INFO(message);
+    REQUIRE(actual == Catch::Approx(expected).epsilon(0).margin(tolerance));
 }
 
 void expectVector(Vector2 actual, Vector2 expected, const char* message) {
@@ -25,16 +20,12 @@ void expectVector(Vector2 actual, Vector2 expected, const char* message) {
     expectNear(actual.y, expected.y, message);
 }
 
-void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
-}
-
-void testConstruction() {
+TEST_CASE("Construction", "[unit][vector2]") {
     expectVector(Vector2{}, {0.0f, 0.0f}, "Default vector should be zero.");
     expectVector(Vector2{2.0f, -3.0f}, {2.0f, -3.0f}, "Coordinates should be preserved.");
 }
 
-void testArithmeticDoesNotModifyInputs() {
+TEST_CASE("Arithmetic preserves inputs", "[unit][vector2]") {
     Vector2 a{6.0f, 8.0f};
     const Vector2 b{2.0f, 4.0f};
 
@@ -48,7 +39,7 @@ void testArithmeticDoesNotModifyInputs() {
     expectVector(b, {2.0f, 4.0f}, "Arithmetic changed the right input.");
 }
 
-void testCompoundAssignments() {
+TEST_CASE("Compound assignments", "[unit][vector2]") {
     Vector2 value{2.0f, 4.0f};
 
     value += Vector2{2.0f, 2.0f};
@@ -61,7 +52,7 @@ void testCompoundAssignments() {
     expectVector(value, {3.0f, 4.0f}, "/= failed.");
 }
 
-void testLengthAndDotProduct() {
+TEST_CASE("Length and dot product", "[unit][vector2]") {
     const Vector2 value{3.0f, 4.0f};
 
     expectNear(value.length(), 5.0f, "Length failed.");
@@ -71,7 +62,7 @@ void testLengthAndDotProduct() {
                "Perpendicular vectors should have a zero dot product.");
 }
 
-void testNormalization() {
+TEST_CASE("Normalization", "[unit][vector2]") {
     Vector2 value{3.0f, 4.0f};
 
     const Vector2 unit = value.normalized();
@@ -83,7 +74,7 @@ void testNormalization() {
     expectVector(value, {0.6f, 0.8f}, "normalize() did not modify its input.");
 }
 
-void testZeroNormalization() {
+TEST_CASE("Zero normalization", "[unit][vector2]") {
     Vector2 zero;
 
     expectVector(zero.normalized(), {}, "Normalizing zero should return zero.");
@@ -91,7 +82,7 @@ void testZeroNormalization() {
     expectVector(zero, {}, "In-place normalization of zero should leave zero.");
 }
 
-void testExtremeNormalization() {
+TEST_CASE("Extreme normalization", "[unit][vector2]") {
     const float largest = std::numeric_limits<float>::max();
     const Vector2 large = Vector2{largest, largest}.normalized();
     expectNear(large.x, 0.70710678f, "Large vector normalization failed.");
@@ -102,30 +93,17 @@ void testExtremeNormalization() {
                  "Small vector normalization failed.");
 }
 
-void testDivisionByZero() {
+TEST_CASE("Division by zero", "[unit][vector2]") {
     Vector2 value{8.0f, 4.0f};
 
     for (float zero : {0.0f, -0.0f}) {
-        bool rejected = false;
-        try {
-            value / zero;
-        } catch (const std::domain_error&) {
-            rejected = true;
-        }
-        require(rejected, "/ should throw std::domain_error for zero.");
-
-        rejected = false;
-        try {
-            value /= zero;
-        } catch (const std::domain_error&) {
-            rejected = true;
-        }
-        require(rejected, "/= should throw std::domain_error for zero.");
+        REQUIRE_THROWS_AS(value / zero, std::domain_error);
+        REQUIRE_THROWS_AS(value /= zero, std::domain_error);
         expectVector(value, {8.0f, 4.0f}, "Rejected division changed the vector.");
     }
 }
 
-void testMovementWithDeltaTime() {
+TEST_CASE("Movement with deltaTime", "[unit][vector2]") {
     Vector2 position{100.0f, 200.0f};
     const Vector2 velocity{60.0f, -30.0f};
     const float deltaTime = 1.0f / 60.0f;
@@ -140,31 +118,4 @@ void testMovementWithDeltaTime() {
     expectVector(velocity, {60.0f, -30.0f}, "Movement changed velocity.");
 }
 
-// Kazdy test dziala niezaleznie; blad jednego nie zatrzymuje pozostalych.
-void runTest(const char* name, void (*test)(), int& failures) {
-    try {
-        test();
-        std::cout << "PASS: " << name << '\n';
-    } catch (const std::exception& error) {
-        ++failures;
-        std::cerr << "FAIL: " << name << " - " << error.what() << '\n';
-    }
-}
-
 } // namespace
-
-int main() {
-    int failures = 0;
-    runTest("Construction", testConstruction, failures);
-    runTest("Arithmetic preserves inputs", testArithmeticDoesNotModifyInputs, failures);
-    runTest("Compound assignments", testCompoundAssignments, failures);
-    runTest("Length and dot product", testLengthAndDotProduct, failures);
-    runTest("Normalization", testNormalization, failures);
-    runTest("Zero normalization", testZeroNormalization, failures);
-    runTest("Extreme normalization", testExtremeNormalization, failures);
-    runTest("Division by zero", testDivisionByZero, failures);
-    runTest("Movement with deltaTime", testMovementWithDeltaTime, failures);
-
-    std::cout << "\nFailed tests: " << failures << '\n';
-    return failures == 0 ? 0 : 1;
-}

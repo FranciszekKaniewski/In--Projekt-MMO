@@ -3,7 +3,7 @@
 #include "../ECS/ECS.h"
 #include "../ECS/Components/ColliderComponent.h"
 #include "../ECS/Components/TransformComponent.h"
-#include "../Vendor/SDL2/include/SDL2/SDL.h"
+#include <SDL.h>
 
 #include <array>
 #include <cmath>

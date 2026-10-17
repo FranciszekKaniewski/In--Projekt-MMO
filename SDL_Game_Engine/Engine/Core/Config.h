@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include "../Vendor/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 struct WindowConfig {
     std::string title;

@@ -12,8 +12,8 @@ file(GLOB_RECURSE ALL_SOURCES
 add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-        Engine/Vendor/SDL2/include/SDL2
-        Engine/Vendor
+        Vendor/SDL2/include/SDL2
+        Vendor
         Engine/Core
         Engine/ECS
         Engine/Audio

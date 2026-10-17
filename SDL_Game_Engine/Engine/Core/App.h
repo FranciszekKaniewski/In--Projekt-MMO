@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
-#include "../Vendor/SDL2/include/SDL2/SDL.h"
+#include <SDL.h>
 #include "../Audio/AudioManager.h"
 
 class SceneManager;

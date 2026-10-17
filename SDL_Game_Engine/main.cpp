@@ -1,6 +1,6 @@
 #include "Engine/Core/App.h"
-#include "Engine/Vendor/SDL2/include/SDL2/SDL_stdinc.h"
-#include "Engine/Vendor/SDL2/include/SDL2/SDL_timer.h"
+#include <SDL_stdinc.h>
+#include <SDL_timer.h>
 #include <algorithm>
 #include <cmath>
 

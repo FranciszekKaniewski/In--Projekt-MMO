@@ -6,7 +6,7 @@
 #include <cstring>
 #include <iostream>
 
-#include "../Vendor/SDL2/include/SDL2/SDL_image.h"
+#include <SDL_image.h>
 
 SDL_Texture* TextureManager::LoadTexture(const char *fileName) {
     if (!fileName || !*fileName || std::strcmp(fileName, "none") == 0) return nullptr;

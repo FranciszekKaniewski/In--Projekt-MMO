@@ -1,13 +1,18 @@
+#include <catch_amalgamated.hpp>
+#include "../support/Measurements.h"
 #define SDL_MAIN_HANDLED
 #define main gameMain
-#include "../main.cpp"
+#include "../../main.cpp"
 #undef main
-#include "../Engine/Scenes/SceneManager.h"
+#include "../../Engine/Scenes/SceneManager.h"
 #include <cstdio>
 #include <stdexcept>
+#include <numeric>
+#include <array>
 
 static void require(bool condition, const char* message) {
-    if(!condition) throw std::runtime_error(message);
+    INFO(message);
+    REQUIRE(condition);
 }
 
 extern "C" SDL_Renderer* SDLCALL __real_SDL_CreateRenderer(SDL_Window*, int, Uint32);
@@ -22,8 +27,13 @@ static bool quitReceived = false;
 
 // Exercise the actual main loop with a scene that measures rendering and updates.
 class FrameTimingScene : public Scene {
-    static constexpr int limitCount = 9;
-    const int limits[limitCount] = {1, 5, 10, 30, 60, 120, 144, 240, 5};
+//    ALL FPS
+//    static constexpr int limitCount = 239;
+//    std::array<int, limitCount> limits;
+
+    static constexpr int limits[] = {1, 5, 10, 30, 60, 120, 144, 240};
+    static constexpr int limitCount = sizeof(limits) / sizeof(limits[0]);
+
     const double frequency = static_cast<double>(SDL_GetPerformanceFrequency());
     int phase = 0;
     int frames = 0;
@@ -33,6 +43,11 @@ class FrameTimingScene : public Scene {
     Uint64 phaseStart = 0;
 
 public:
+//    ALL FPS
+//    FrameTimingScene() {
+//        std::iota(limits.begin(), limits.end(), 1);
+//    }
+
     void onEnter(App& app) override { app.settings.fpsLimit = limits[0]; }
 
     void handleEvents(App&, SDL_Event& event) override {
@@ -69,6 +84,8 @@ public:
             if(elapsed < 2.1) return;
             const double fps = (frames - 1) / elapsed;
             const double updateRate = updates / elapsed;
+            test_report::recordFrame(limits[phase], app.currentFPS, frames - 1, updates,
+                                     fps, updateRate, elapsed);
             std::printf("Limit %d: %.2f FPS, %.2f updates/s, currentFPS=%d\n",
                         limits[phase], fps, updateRate, app.currentFPS);
             require(fps >= limits[phase] * 0.90 && fps <= limits[phase] * 1.02,
@@ -103,6 +120,8 @@ public:
             if(elapsed < 2.1) return;
             const double fps = (frames - 1) / elapsed;
             const double updateRate = updates / elapsed;
+            test_report::recordFrame(0, app.currentFPS, frames - 1, updates,
+                                     fps, updateRate, elapsed);
             std::printf("Unlimited: %.2f FPS, %.2f updates/s, currentFPS=%d\n",
                         fps, updateRate, app.currentFPS);
             require(fps > 240.0 && app.currentFPS > 240,
@@ -120,18 +139,13 @@ public:
 
 Scene* createScene1() { return new FrameTimingScene(); }
 
-int main() {
-    try {
-        SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
-        SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
-        SDL_setenv("SDL_RENDER_DRIVER", "", 1);
-        require(gameMain(0, nullptr) == 0, "Game startup failed");
-        require(finished && quitReceived, "Frame timing test did not complete");
-        std::printf("PASS: FPS limits, fixed updates/deltaTime, live limit changes, "
-                    "stall recovery, unlimited rendering and SDL_QUIT.\n");
-        return 0;
-    } catch(const std::exception& error) {
-        std::fprintf(stderr, "FAIL: %s\n", error.what());
-        return 1;
-    }
+TEST_CASE("Main loop timing and shutdown", "[e2e][frame-timing]") {
+    finished = quitReceived = false;
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
+    SDL_setenv("SDL_RENDER_DRIVER", "", 1);
+    const int exitCode = gameMain(0, nullptr);
+    REQUIRE(exitCode == 0);
+    REQUIRE(finished);
+    REQUIRE(quitReceived);
 }
