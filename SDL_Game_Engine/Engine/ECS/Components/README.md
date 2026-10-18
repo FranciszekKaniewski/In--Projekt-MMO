@@ -53,6 +53,15 @@ Obrysy są zielone, widoczne tylko przy `app.devMode == true`. Klawisz F1 przeł
 Renderer korzysta z logicznych współrzędnych SDL. Gdy dodasz kamerę, trzeba będzie uwzględnić jej
 przesunięcie również podczas rysowania hitboxów.
 
+Świat i UI korzystają ze stałej bazy `App::logicalSize` (1280 × 720).
+Zmiana rozdzielczości okna skaluje sprite'y i obrysy colliderów razem, zachowując ich proporcje.
+Przy 1920 × 1080 obiekt o boku 128 jednostek zajmuje 192 piksele, a przy 2560 × 1440 — 256 pikseli.
+Inne proporcje ekranu dodają pasy, zamiast rozciągać koła w elipsy.
+Obrysy zachowują grubość jednego fizycznego piksela, również przy pomniejszaniu obrazu.
+Pozycje, prędkości, rozmiary colliderów i rozmiary klatek źródłowych pozostają w swoich jednostkach;
+nie mnoż ich ponownie przez skalę okna. Rozmiar przestrzeni logicznej zwraca `app.getUISize()`,
+a fizyczny rozmiar okna `app.getWindowSize()`. Testy projekcji: `make test-resolution`.
+
 ## Prędkość
 
 Komponent dodaj tylko encjom, które mają się poruszać. Przykład dla istniejącej encji `circle`:

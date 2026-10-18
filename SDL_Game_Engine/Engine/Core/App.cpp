@@ -89,6 +89,7 @@ void App::init(const char* configPath) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     std::cout << "Renderer Created!" << std::endl;
+    SDL_SetHint(SDL_HINT_RENDER_LOGICAL_SIZE_MODE, "letterbox");
     syncDisplaySettings();
 
     if(TTF_Init() == -1) {
@@ -157,8 +158,9 @@ void App::syncDisplaySettings() {
     SDL_GetWindowSize(window, &settings.width, &settings.height);
     settings.fullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
     if(renderer) {
-        SDL_RenderSetLogicalSize(renderer, std::max(1024, settings.width),
-                                  std::max(720, settings.height));
+        if (SDL_RenderSetLogicalSize(renderer, logicalSize.wight, logicalSize.height) != 0) {
+            std::cerr << "Cannot set logical resolution: " << SDL_GetError() << '\n';
+        }
     }
 }
 

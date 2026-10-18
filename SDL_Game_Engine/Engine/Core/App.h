@@ -29,6 +29,9 @@ struct WindowResolution {
 
 class App {
 public:
+    // World and UI coordinates share this resolution, independent of the window size.
+    static constexpr WindowSize logicalSize{1280, 720};
+
     App() = default;
     ~App();
     App(const App&) = delete;

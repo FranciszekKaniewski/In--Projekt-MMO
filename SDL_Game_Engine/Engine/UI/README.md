@@ -112,7 +112,10 @@ Pliki `.cpp` w `Game/Scenes` są uwzględniane przez `make build`; uruchamiaj gr
 - Kontrolki dodawane przez `UIBox::add...()` otrzymują pozycję względem lewego górnego rogu panelu.
 - `x = -1` lub `y = -1` centruje na danej osi: panel w UI, a kontrolkę w panelu.
 - Po dodaniu `element->rect` zawiera już pozycję w całym UI. `changeRect()` także przyjmuje tę pozycję.
-- Centrowanie jest obliczane przy dodawaniu. Po zmianie rozdzielczości układ trzeba przeliczyć lub odbudować.
+- Świat i UI korzystają z bazy `App::logicalSize` (1280 × 720). Zmiana rozdzielczości skaluje cały obraz
+  z zachowaniem proporcji, a przy innych proporcjach okna dodaje pasy.
+- Centrowanie jest obliczane przy dodawaniu w tej stałej przestrzeni. Sama zmiana rozdzielczości okna
+  nie wymaga przebudowy układu. SDL przelicza również współrzędne zdarzeń myszy na przestrzeń logiczną.
 
 ## Kontrolki i callbacki
 

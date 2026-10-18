@@ -1,4 +1,4 @@
-.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-memory test-frame-timing
+.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-resolution test-memory test-frame-timing
 .NOTPARALLEL:
 
 CXX := g++
@@ -71,7 +71,8 @@ test-velocity: FILTER := [velocity]
 test-collider: FILTER := [collider]
 test-sprite: FILTER := [sprite]
 test-animation: FILTER := [animation]
+test-resolution: FILTER := [resolution]
 test-memory: FILTER := [memory]
 test-vector2 test-velocity: test-unit
-test-collider test-sprite test-animation test-memory: test-integration
+test-collider test-sprite test-animation test-resolution test-memory: test-integration
 test-frame-timing: test-e2e
