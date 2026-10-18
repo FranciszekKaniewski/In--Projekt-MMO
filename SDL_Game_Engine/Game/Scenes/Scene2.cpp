@@ -1,7 +1,11 @@
 #include "../../Engine/Scenes/GameScene.h"
+#include "../../Engine/ECS/Components/AnimationComponent.h"
 #include "../../Engine/ECS/Components/ColliderComponent.h"
+#include "../../Engine/ECS/Components/SpriteComponent.h"
 #include "../../Engine/ECS/Components/TransformComponent.h"
 #include "../../Engine/ECS/Components/VelocityComponent.h"
+#include "../../Engine/Renderer/TextureManager.h"
+#include "../../Engine/Scenes/SceneManager.h"
 
 #include <cmath>
 
@@ -44,9 +48,37 @@ public:
         world.addComponent<TransformComponent>(circle,math::Vector2{width * 5.0f / 6.0f + movementRadius, centerY});
         world.addComponent<VelocityComponent>(circle);
         world.addComponent<ColliderComponent>(circle, ColliderComponent::circle(64.0f));
+
+        const auto bluePotionTexture = TextureManager::LoadSharedTexture("Assets/Graphics/Potion_blue.png");
+        const auto redPotionTexture = TextureManager::LoadSharedTexture("Assets/Graphics/Potion_red.png");
+        const auto greenPotionTexture = TextureManager::LoadSharedTexture("Assets/Graphics/Potion_green.png");
+
+        const auto addPotionSprite = [&](ecs::Entity entity, char color = 'b') {
+            std::map<char, std::shared_ptr<SDL_Texture>> map = {
+                    {'b',bluePotionTexture},{'r',redPotionTexture},{'g',greenPotionTexture}
+            };
+            auto& sprite = world.addComponent<SpriteComponent>(entity);
+
+            sprite.texture = map[color];
+            sprite.source = {0, 0, 12, 17};
+            sprite.size = {128.0f, 180.0f};
+            sprite.offset = {};
+
+            SDL_SetTextureScaleMode(map[color].get(), SDL_ScaleModeNearest);
+
+            auto& animation = world.addComponent<AnimationComponent>(entity);
+            animation.frameCount = 3;
+            animation.frameDuration = 0.3;
+            animation.loop = true;
+        };
+
+        addPotionSprite(square);
+        addPotionSprite(circle,'r');
+        addPotionSprite(polygon,'g');
     }
 
-    void update(App& app) override {
+protected:
+    void updateWorld(App& app) override {
         const float dt = App::deltaTime;
 
         angle += angularSpeed * dt;
@@ -74,6 +106,15 @@ public:
                      const VelocityComponent& velocity) {
                     transform.position += velocity.total() * dt;
                 });
+    }
+
+    void handleEvents(App& app, SDL_Event &event) override {
+        if (event.type == SDL_KEYDOWN) {
+
+            if (event.key.keysym.sym == SDLK_ESCAPE) {
+                app.sceneManager->changeScene(createScene1, app);
+            }
+        }
     }
 };
 

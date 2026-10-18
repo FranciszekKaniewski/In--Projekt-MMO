@@ -39,6 +39,10 @@ SDL_Texture* TextureManager::LoadTexture(const char *fileName) {
     return tex;
 }
 
+std::shared_ptr<SDL_Texture> TextureManager::LoadSharedTexture(const char* fileName) {
+    return {LoadTexture(fileName), SDL_DestroyTexture};
+}
+
 SDL_Texture* TextureManager::LoadTextTexture(Font font, const std::string& label) {
     if (label.empty()) return nullptr;
     if (!font.font || !App::renderer) {

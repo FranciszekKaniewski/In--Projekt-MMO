@@ -44,7 +44,7 @@ Przykład zakłada encję z `TransformComponent`, bez dotychczasowego `ColliderC
 
 ## Podgląd developerski
 
-`GameScene::render()` czyści tło, wywołuje `renderWorld(app)`, rysuje hitboxy i na końcu HUD.
+`GameScene::render()` czyści tło, wywołuje `renderWorld(app)`, rysuje sprite'y, hitboxy i na końcu HUD.
 W scenach pochodnych rysuj świat przez nadpisanie `renderWorld(App&)`, aby zachować tę kolejność.
 Jeżeli nadpisujesz całe `render()`, musisz sam wywołać `renderColliderDebug(world, app.renderer, app.devMode)`.
 
@@ -70,7 +70,7 @@ velocity.vectors["movement"] = {60.0f, 0.0f}; // Zastępuje poprzedni wektor ruc
 velocity.vectors.erase("knockback");          // Usuwa tylko odrzut.
 ```
 
-Sam komponent przechowuje dane. Aby uzyskać ruch, w `update()` sceny lub w systemie ruchu
+Sam komponent przechowuje dane. Aby uzyskać ruch, w `updateWorld()` sceny lub w systemie ruchu
 aktualizuj pozycje encji mających oba komponenty:
 
 ```cpp
@@ -87,3 +87,66 @@ Są to prędkości, a nie jednorazowe przesunięcia; system mnoży ich sumę prz
 
 Testy: `make test-collider`. Sprawdzają rzeczywiste piksele renderera programowego bez otwierania okna.
 Sumowanie prędkości i ruch encji: `make test-velocity`.
+
+## Sprite i animacja
+
+`SpriteComponent` przechowuje współdzieloną teksturę, prostokąt źródłowy w pikselach obrazu,
+rozmiar wyświetlania w jednostkach świata, offset, odbicie SDL i widoczność.
+Środek sprite'a to `transform.position + sprite.offset`, tak jak w colliderach typu box i circle.
+`source` domyślnie wybiera klatkę 64 × 64, a `size` ustawia jej rozmiar w świecie.
+Rozmiar grafiki nie zmienia collidera. Sprite statyczny nie potrzebuje `AnimationComponent`.
+
+Przykład wewnątrz `onEnter()` sceny, po dodaniu własnego spritesheetu do `Game/Assets/Graphics/`:
+
+```cpp
+#include "Engine/ECS/Components/SpriteComponent.h"
+#include "Engine/ECS/Components/AnimationComponent.h"
+#include "Engine/Renderer/TextureManager.h"
+
+auto texture = TextureManager::LoadSharedTexture("Assets/Graphics/player.png");
+if (!texture) return; // Loader wypisuje przyczynę błędu.
+
+const auto player = world.createEntity();
+world.addComponent<TransformComponent>(player, math::Vector2{200.0f, 300.0f});
+auto& sprite = world.addComponent<SpriteComponent>(player);
+sprite.texture = texture;
+sprite.source = {0, 0, 32, 48};
+sprite.size = {64.0f, 96.0f};
+sprite.flip = SDL_FLIP_NONE; // Także SDL_FLIP_HORIZONTAL lub SDL_FLIP_VERTICAL.
+
+auto& animation = world.addComponent<AnimationComponent>(player);
+animation.row = 1;            // Wiersze liczone od zera.
+animation.frameCount = 4;     // Kolejne klatki od pierwszej kolumny.
+animation.frameDuration = 0.2; // Sekundy na klatkę.
+```
+
+Przykład zakłada równe, przylegające klatki bez marginesów; obraz musi zawierać cały wskazany wiersz.
+Renderer pomija brakujące tekstury, niepoprawne rozmiary i wycinki poza granicami obrazu.
+Współrzędne rysowania zachowują część ułamkową. Nie ma jeszcze kamery ani sortowania warstw.
+
+`LoadSharedTexture()` używa `SDL_DestroyTexture` po zwolnieniu ostatniego uchwytu.
+Przypisuj tę samą wartość `texture` kolejnym sprite'om korzystającym z tej grafiki.
+Loader nie ma cache — każde wywołanie wczytuje nową teksturę. Nie twórz niezależnych
+`shared_ptr` z tego samego surowego wskaźnika. Wszystkie uchwyty muszą zostać zwolnione przed
+zniszczeniem renderera; komponenty świata są niszczone razem ze sceną przed `App::clean()`
+zwalniającym renderer.
+
+`GameScene::update()` wywołuje `updateWorld(app)`, a następnie `updateAnimations(world, App::deltaTime)`.
+W scenach pochodnych nadpisuj `updateWorld(App&)`, aby animacje były aktualizowane automatycznie.
+`GameScene::render()` automatycznie wywołuje `renderSprites(world, app.renderer)` po `renderWorld()`.
+Przy nadpisywaniu całych `update()` lub `render()` trzeba samodzielnie zapewnić te wywołania.
+Własne sceny mogą też korzystać bezpośrednio z `Engine/ECS/AnimationSystem.h`
+oraz `Engine/Renderer/SpriteRenderer.h`.
+
+- `animation.playing = false` wstrzymuje animację, zachowując klatkę i pozostały czas.
+- `animation.loop = false` odtwarza ją raz i zatrzymuje na ostatniej klatce.
+- `animation.restart()` ustawia pierwszą klatkę, zeruje zegar i wznawia odtwarzanie.
+  Prostokąt źródłowy zostaje zsynchronizowany przy następnej aktualizacji, także z `deltaTime == 0`.
+- Przy zmianie animacji ustaw `row`, `frameCount`, `frameDuration` i wywołaj `restart()`.
+  Nie restartuj tej samej animacji w każdej aktualizacji.
+- `sprite.visible = false` wyłącza rysowanie, ale nie zatrzymuje animacji.
+- Aktualizacja zachowuje nadmiar czasu i obsługuje wiele klatek w stałym czasie.
+  Ujemny lub nieskończony `deltaTime`, NaN i niepoprawne dane komponentu są pomijane.
+
+Testy: `make test-sprite` obejmuje piksele renderera programowego, animacje i współdzielenie tekstur.
+`make test-animation` uruchamia tylko przypadki dotyczące animacji.
