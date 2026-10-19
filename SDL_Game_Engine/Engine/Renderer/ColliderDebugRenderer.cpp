@@ -3,9 +3,11 @@
 #include "../ECS/ECS.h"
 #include "../ECS/Components/ColliderComponent.h"
 #include "../ECS/Components/TransformComponent.h"
+#include "../ECS/Components/CameraComponent.h"
 #include <SDL.h>
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -86,17 +88,42 @@ void drawPolygon(SDL_Renderer* renderer, math::Vector2 origin,
 
 } // namespace
 
-void renderColliderDebug(ecs::Registry& world, SDL_Renderer* renderer, bool devMode) {
-    if (!devMode || !renderer) return;
+void renderColliderDebug(ecs::Registry& world, SDL_Renderer* renderer, bool devMode,
+                         const CameraComponent* camera) {
+    if (!devMode || !renderer || (camera && !camera->isValid())) return;
     const ScopedDrawColor drawColor(renderer);
     const ScopedDrawScale drawScale(renderer);
 
     world.forEach<TransformComponent, ColliderComponent>(
-        [renderer, scale = drawScale.scale](ecs::Entity, const TransformComponent& transform,
+        [renderer, camera, scale = drawScale.scale](ecs::Entity, const TransformComponent& transform,
                                             const ColliderComponent& collider) {
             if (!collider.enabled || !collider.isValid()) return;
-            const auto origin = transform.position + collider.offset;
+            auto origin = transform.position + collider.offset;
             if (!std::isfinite(origin.x) || !std::isfinite(origin.y)) return;
+
+            if (camera) {
+                SDL_FRect bounds{};
+                if (collider.shape == ColliderComponent::Shape::Circle) {
+                    bounds = {origin.x - collider.radius, origin.y - collider.radius,
+                              collider.radius * 2.0f, collider.radius * 2.0f};
+                } else if (collider.shape == ColliderComponent::Shape::Box) {
+                    bounds = {origin.x - collider.size.x * 0.5f, origin.y - collider.size.y * 0.5f,
+                              collider.size.x, collider.size.y};
+                } else {
+                    auto minimum = collider.vertices.front();
+                    auto maximum = minimum;
+                    for (const auto& vertex : collider.vertices) {
+                        minimum.x = std::min(minimum.x, vertex.x);
+                        minimum.y = std::min(minimum.y, vertex.y);
+                        maximum.x = std::max(maximum.x, vertex.x);
+                        maximum.y = std::max(maximum.y, vertex.y);
+                    }
+                    bounds = {origin.x + minimum.x, origin.y + minimum.y,
+                              maximum.x - minimum.x, maximum.y - minimum.y};
+                }
+                if (!camera->isVisible(bounds)) return;
+                origin -= camera->position;
+            }
 
             if (collider.shape == ColliderComponent::Shape::Circle) {
                 drawCircle(renderer, origin, collider.radius, scale);

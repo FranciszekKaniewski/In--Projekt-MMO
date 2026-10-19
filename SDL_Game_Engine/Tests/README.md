@@ -8,11 +8,11 @@ Raportowanie realizuje listener Catch2 w support/Report.cpp; Makefile nie parsuj
 | Katalog | Zestawy | Zakres |
 |---|---|---|
 | unit | Vector2, Velocity | Matematyka i prędkości, bez SDL i plików |
-| integration | Collider, SpriteAnimation, DisplayScaling, MemoryLeaks | Renderer programowy SDL, skalowanie rozdzielczości, sprite'y, animacje, ECS, sceny, UI, audio i własność zasobów |
+| integration | Camera, Collider, SpriteAnimation, DisplayScaling, Map, MemoryLeaks | Renderer programowy SDL, kamera i culling, mapy, skalowanie rozdzielczości, sprite'y, animacje, ECS, sceny, UI, audio i własność zasobów |
 | e2e | FrameTiming | Rzeczywista pętla z main.cpp, testowa scena, limity FPS, logika i SDL_QUIT |
 | support | Report.cpp, Measurements.h | Wspólny runner, JSON i bufory pomiarów |
 
-Obecnie jest **35 przypadków Catch2**: 14 unit, 20 integration i 1 e2e.
+Obecnie są **43 przypadki Catch2**: 14 unit, 28 integration i 1 e2e.
 Asercje są liczone osobno. Scenariusz pamięci obejmujący 300 przejść scen jest jednym przypadkiem.
 
 Wszystkie biblioteki są w katalogu projektu: Vendor/SDL2, Vendor/nlohmann, Vendor/Catch2.
@@ -30,7 +30,8 @@ Niezerowy kod oznacza błąd testu, kompilacji, raportowania albo niekompletny p
 
 **make test-unit**, **make test-integration** i **make test-e2e** uruchamiają wybraną kategorię.
 Zachowane skróty: make test-vector2, make test-velocity, make test-collider,
-make test-sprite, make test-animation, make test-resolution, make test-memory i make test-frame-timing.
+make test-sprite, make test-animation, make test-resolution, make test-map, make test-camera,
+make test-memory i make test-frame-timing.
 
 Catch2 i kod raportowania kompilują się raz do wspólnych obiektów.
 Programy kategorii są przebudowywane po zmianach źródeł lub nagłówków.

@@ -49,9 +49,9 @@ W scenach pochodnych rysuj świat przez nadpisanie `renderWorld(App&)`, aby zach
 Jeżeli nadpisujesz całe `render()`, musisz sam wywołać `renderColliderDebug(world, app.renderer, app.devMode)`.
 
 Obrysy są zielone, widoczne tylko przy `app.devMode == true`. Klawisz F1 przełącza ten tryb.
-`Scene2` zawiera przykładowy kwadrat 128 × 128, koło o promieniu 64 oraz pięciokąt.
-Renderer korzysta z logicznych współrzędnych SDL. Gdy dodasz kamerę, trzeba będzie uwzględnić jej
-przesunięcie również podczas rysowania hitboxów.
+`Scene2` zawiera gracza z prostokątnym hitboxem 20 × 10 przy stopach.
+Renderer korzysta z logicznych współrzędnych SDL. Aktywna kamera `GameScene` przesuwa mapę,
+sprite'y i obrysy colliderów razem. HUD i nakładka FPS pozostają w przestrzeni ekranu.
 
 Świat i UI korzystają ze stałej bazy `App::logicalSize` (1280 × 720).
 Zmiana rozdzielczości okna skaluje sprite'y i obrysy colliderów razem, zachowując ich proporcje.
@@ -131,7 +131,8 @@ animation.frameDuration = 0.2; // Sekundy na klatkę.
 
 Przykład zakłada równe, przylegające klatki bez marginesów; obraz musi zawierać cały wskazany wiersz.
 Renderer pomija brakujące tekstury, niepoprawne rozmiary i wycinki poza granicami obrazu.
-Współrzędne rysowania zachowują część ułamkową. Nie ma jeszcze kamery ani sortowania warstw.
+Współrzędne rysowania zachowują część ułamkową. Kamera pomija sprite'y poza widokiem;
+sortowanie warstw nie jest jeszcze zaimplementowane.
 
 `LoadSharedTexture()` używa `SDL_DestroyTexture` po zwolnieniu ostatniego uchwytu.
 Przypisuj tę samą wartość `texture` kolejnym sprite'om korzystającym z tej grafiki.
@@ -159,3 +160,46 @@ oraz `Engine/Renderer/SpriteRenderer.h`.
 
 Testy: `make test-sprite` obejmuje piksele renderera programowego, animacje i współdzielenie tekstur.
 `make test-animation` uruchamia tylko przypadki dotyczące animacji.
+
+## Kamera
+
+`CameraComponent` jest komponentem encji kamery. `position` to lewy górny narożnik widoku w świecie,
+`size` to widoczny obszar w jednostkach świata, a `speed` to prędkość ręcznego przesuwania.
+W `GameScene` wskaż encję przez chronione pole `cameraEntity`:
+
+```cpp
+cameraEntity = world.createEntity();
+auto& view = world.addComponent<CameraComponent>(cameraEntity);
+view.size = {1280.0f, 720.0f};
+view.target = player; // Encja z TransformComponent.
+view.following = true;
+view.bounded = true;
+view.bounds = {0.0f, 0.0f, 5120.0f, 5120.0f};
+updateCameras(world); // Ustawia widok także przed pierwszym update().
+```
+
+`GameScene::update()` aktualizuje śledzenie po `updateWorld()` i animacjach, więc kamera korzysta
+z bieżącej pozycji gracza. Brak lub usunięcie celu wyłącza śledzenie, zachowując ostatnią pozycję.
+`camera()->move(direction, App::deltaTime)` przesuwa widok, normalizuje kierunek po przekątnej
+i wyłącza podążanie. `following = true` przywraca je przy następnej aktualizacji.
+`clampToBounds()` ogranicza widok do mapy; mapę mniejszą od widoku centruje na danej osi.
+
+`Scene2`: WASD porusza graczem, strzałki przesuwają kamerę,
+F przełącza śledzenie, Escape wraca do menu. Gracz jest ograniczony do zewnętrznych granic mapy;
+kolizje z lądem i wodą nie są jeszcze zaimplementowane.
+
+Gracz korzysta z `Assets/Graphics/Player/player_idle.png` (12 klatek) i `player_walk.png` (8 klatek).
+Klatki mają 64 × 64 px i osiem wierszy: NW, W, SW, N, SE, E, NE, S.
+Puszczenie WASD przywraca animację stania w ostatnim kierunku.
+Sprite ma rozmiar 128 × 128 jednostek, z przezroczystymi marginesami, i offset `(0, -20)`;
+pozycja encji oraz śledzony punkt kamery wypadają przy stopach. Kamera początkowo śledzi gracza.
+
+`GameScene` automatycznie przekazuje kamerę do renderowania sprite'ów i colliderów. Własne rysowanie
+mapy w `renderWorld()` powinno używać `map.draw(app.renderer, camera())`.
+Przy własnych rendererach współrzędna ekranowa to `worldPosition - camera.position`.
+Pozycje i rozmiary komponentów nie są modyfikowane przez projekcję. Pole widzenia kamery powinno
+odpowiadać logicznemu rozmiarowi ekranu (`app.getUISize()`), niezależnie od fizycznej rozdzielczości.
+Obiekty poza widokiem są odrzucane przed wywołaniami SDL. Nakładkę UI rysuj po świecie bez kamery.
+
+Testy: `make test-camera` sprawdza ruch, śledzenie, ograniczenia, projekcję i faktyczne wywołania
+rysowania SDL, w tym rozmiar źródłowego wycinka mapy i pomijanie niewidocznych sprite'ów.

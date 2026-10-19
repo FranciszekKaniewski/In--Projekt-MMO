@@ -1,4 +1,4 @@
-.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-resolution test-memory test-frame-timing
+.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-resolution test-map test-camera test-memory test-frame-timing
 .NOTPARALLEL:
 
 CXX := g++
@@ -11,6 +11,7 @@ SDL_LIBS := -L Vendor/SDL2/lib -lmingw32 -lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2
 TEST_COMMON := build/tests/catch.o build/tests/report.o
 MEMORY_HOOKS := -Wl,--wrap=SDL_Init,--wrap=SDL_CreateWindow,--wrap=SDL_CreateRenderer \
 	-Wl,--wrap=TTF_Init,--wrap=IMG_Init,--wrap=Mix_Init,--wrap=Mix_OpenAudio
+RENDER_HOOKS := -Wl,--wrap=SDL_RenderCopyF,--wrap=SDL_RenderCopyExF
 
 build:
 	@if not exist build mkdir build
@@ -43,7 +44,7 @@ build/tests/unit/tests.exe: $(TEST_COMMON) $(wildcard Tests/unit/*.cpp) Engine/E
 
 build/tests/integration/tests.exe: $(TEST_COMMON) $(wildcard Tests/integration/*.cpp) $(ENGINE) $(GAME) $(HEADERS)
 	@if not exist "build\tests\integration" mkdir "build\tests\integration"
-	$(CXX) $(CXXFLAGS) -o $@ $(wildcard Tests/integration/*.cpp) $(ENGINE) $(GAME) $(TEST_COMMON) $(MEMORY_HOOKS) -L Vendor/SDL2/lib -lSDL2_test $(SDL_LIBS)
+	$(CXX) $(CXXFLAGS) -o $@ $(wildcard Tests/integration/*.cpp) $(ENGINE) $(GAME) $(TEST_COMMON) $(MEMORY_HOOKS) $(RENDER_HOOKS) -L Vendor/SDL2/lib -lSDL2_test $(SDL_LIBS)
 
 build/tests/e2e/tests.exe: $(TEST_COMMON) $(wildcard Tests/e2e/*.cpp) main.cpp $(ENGINE) $(HEADERS)
 	@if not exist "build\tests\e2e" mkdir "build\tests\e2e"
@@ -72,7 +73,9 @@ test-collider: FILTER := [collider]
 test-sprite: FILTER := [sprite]
 test-animation: FILTER := [animation]
 test-resolution: FILTER := [resolution]
+test-map: FILTER := [map]
+test-camera: FILTER := [camera]
 test-memory: FILTER := [memory]
 test-vector2 test-velocity: test-unit
-test-collider test-sprite test-animation test-resolution test-memory: test-integration
+test-collider test-sprite test-animation test-resolution test-map test-camera test-memory: test-integration
 test-frame-timing: test-e2e
