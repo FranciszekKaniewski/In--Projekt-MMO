@@ -25,7 +25,7 @@ po 16 × 16 px. To dwukrotnie większa szerokość i wysokość niż w przykład
 większa powierzchnia), bez powiększania pikseli grafiki. W scenie, przy skali 1, świat ma
 2560 × 2560 jednostek, a pole zajmuje 16 × 16 jednostek.
 Kamera pokazuje fragment 1280 × 720 i zaczyna przy centralnej polanie.
-Strzałki przesuwają kamerę, która zatrzymuje się na granicach mapy.
+WASD lub strzałki poruszają graczem. Kamera śledzi go i zatrzymuje się na granicach mapy.
 Obiekty ECS są rysowane na mapie przez `GameScene`. Zmiana rozdzielczości okna korzysta ze wspólnej
 projekcji silnika, bez zmiany rozmiaru świata ani zasięgu kamery w jednostkach świata.
 

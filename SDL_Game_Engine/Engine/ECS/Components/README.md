@@ -79,8 +79,9 @@ velocity.vectors["movement"] = {60.0f, 0.0f}; // Zastępuje poprzedni wektor ruc
 velocity.vectors.erase("knockback");          // Usuwa tylko odrzut.
 ```
 
-Sam komponent przechowuje dane. Aby uzyskać ruch, w `updateWorld()` sceny lub w systemie ruchu
-aktualizuj pozycje encji mających oba komponenty:
+Sam komponent przechowuje dane. `GameScene` automatycznie uruchamia `updateMovement()`,
+które aktualizuje pozycje encji mających oba komponenty. Własna pętla może wywołać ten system
+bez SDL i renderera. Odpowiada on następującemu krokowi integracji:
 
 ```cpp
 world.forEach<TransformComponent, VelocityComponent>(
@@ -90,6 +91,7 @@ world.forEach<TransformComponent, VelocityComponent>(
 ```
 
 Collider korzysta z pozycji w `TransformComponent`, więc jego obrys podąża za poruszającą się encją.
+Nie wykonuj ponownie tej integracji w `updateWorld()`, jeżeli korzystasz z `GameScene`.
 Wektory pozostają aktywne do ich zmiany lub usunięcia. `velocity.vectors.clear()` usuwa wszystkie źródła.
 Nie dodawaj nowego wpisu co klatkę dla tego samego źródła — aktualizuj jego wartość pod tą samą nazwą.
 Są to prędkości, a nie jednorazowe przesunięcia; system mnoży ich sumę przez `deltaTime`.
@@ -141,8 +143,9 @@ Loader nie ma cache — każde wywołanie wczytuje nową teksturę. Nie twórz n
 zniszczeniem renderera; komponenty świata są niszczone razem ze sceną przed `App::clean()`
 zwalniającym renderer.
 
-`GameScene::update()` wywołuje `updateWorld(app)`, a następnie `updateAnimations(world, App::deltaTime)`.
-W scenach pochodnych nadpisuj `updateWorld(App&)`, aby animacje były aktualizowane automatycznie.
+`GameScene::update()` kolejno odczytuje lokalny input, wywołuje `updateWorld(app)`, aktualizuje ruch,
+wybiera animację kierunkową, przesuwa klatki animacji i aktualizuje kamerę.
+W scenach pochodnych nadpisuj `updateWorld(App&)`, aby dostarczać własne komendy lub logikę świata.
 `GameScene::render()` automatycznie wywołuje `renderSprites(world, app.renderer)` po `renderWorld()`.
 Przy nadpisywaniu całych `update()` lub `render()` trzeba samodzielnie zapewnić te wywołania.
 Własne sceny mogą też korzystać bezpośrednio z `Engine/ECS/AnimationSystem.h`
@@ -184,14 +187,15 @@ z bieżącej pozycji gracza. Brak lub usunięcie celu wyłącza śledzenie, zach
 i wyłącza podążanie. `following = true` przywraca je przy następnej aktualizacji.
 `clampToBounds()` ogranicza widok do mapy; mapę mniejszą od widoku centruje na danej osi.
 
-`Scene2`: WASD porusza graczem, strzałki przesuwają kamerę,
-F przełącza śledzenie, Escape wraca do menu. Gracz jest ograniczony do zewnętrznych granic mapy;
+`Scene2`: WASD lub strzałki poruszają graczem, Escape wraca do menu.
+Kamera stale śledzi gracza. Gracz jest ograniczony do zewnętrznych granic mapy;
 kolizje z lądem i wodą nie są jeszcze zaimplementowane.
 
-Gracz korzysta z `Assets/Graphics/Player/player_idle.png` (12 klatek) i `player_walk.png` (8 klatek).
+Gracz korzysta z oryginalnych `Assets/Player/player_idle_full_sprite_sheet.png` (12 klatek)
+i `player_walk_complete_sprite_sheet.png` (8 klatek).
 Klatki mają 64 × 64 px i osiem wierszy: NW, W, SW, N, SE, E, NE, S.
 Puszczenie WASD przywraca animację stania w ostatnim kierunku.
-Sprite ma rozmiar 128 × 128 jednostek, z przezroczystymi marginesami, i offset `(0, -20)`;
+Sprite ma rozmiar 128 × 128 jednostek, z przezroczystymi marginesami, i offset `(0, -24)`;
 pozycja encji oraz śledzony punkt kamery wypadają przy stopach. Kamera początkowo śledzi gracza.
 
 `GameScene` automatycznie przekazuje kamerę do renderowania sprite'ów i colliderów. Własne rysowanie
@@ -203,3 +207,33 @@ Obiekty poza widokiem są odrzucane przed wywołaniami SDL. Nakładkę UI rysuj 
 
 Testy: `make test-camera` sprawdza ruch, śledzenie, ograniczenia, projekcję i faktyczne wywołania
 rysowania SDL, w tym rozmiar źródłowego wycinka mapy i pomijanie niewidocznych sprite'ów.
+
+## Gracz i systemy ruchu
+
+`Game/Entities/Player.h` udostępnia `spawnPlayer(world, position)`. Fabryka tworzy encję z tagiem
+`PlayerComponent`, pozycją, prędkością, intencją ruchu, parametrami ruchu, hitboxem, sprite'em
+i obiema animacjami. Waliduje rozmiary arkuszy i ustawia filtrowanie nearest. Brak grafiki
+zwraca pustą encję, bez częściowo utworzonego gracza.
+
+Scena jedynie tworzy gracza i dodaje mu `KeyboardControlComponent`, opcjonalne
+`MovementBoundsComponent` oraz `CameraComponent`. W `Scene2` kamera znajduje się na tej samej
+encji co gracz (`cameraEntity = player`, `view.target = player`); mapa pozostaje osobnym zasobem.
+Scena nie zawiera odczytu klawiatury, obliczania ruchu ani wyboru klatek.
+
+- `MovementInputComponent::direction` jest intencją na krok symulacji. Zero zatrzymuje ruch własny.
+- `KeyboardControlComponent` oznacza encje, którym `KeyboardInputSystem` zapisuje WASD/strzałki.
+  Gracz zdalny lub bot nie dostaje tego tagu; jego kontroler zapisuje tę samą intencję ruchu.
+- `MovementComponent` zawiera szybkość, ostatni kierunek patrzenia i informację o rzeczywistym ruchu.
+- `MovementSystem` ogranicza długość intencji do jedności, zapisuje prędkość pod nazwą `movement`,
+  zachowuje inne składowe i całkuje sumę prędkości raz na krok. Opcjonalne granice dotyczą pozycji
+  encji, z uwzględnieniem marginesu hitboxa ustawionego przez scenę.
+- `DirectionalAnimationComponent` przechowuje klipy stania/chodu i mapowanie ośmiu kierunków
+  na wiersze arkusza. `DirectionalAnimationSystem` wybiera klip po ruchu, a `AnimationSystem`
+  odmierza czas. Niezmieniona animacja zachowuje klatkę i zegar; zatrzymanie zachowuje kierunek.
+
+`updateWorld()` jest miejscem na komendy AI lub sieci przed symulacją. Ruch nie zależy od SDL;
+odczyt lokalnej klawiatury i tekstury są osobnymi warstwami. Nie ma jeszcze transportu sieciowego.
+
+Testy: `make test-player` sprawdza niezależne sterowanie dwiema encjami, ruch po przekątnej,
+składowe zewnętrzne, granice, wszystkie klatki oryginalnych arkuszy we wszystkich kierunkach,
+przejścia stania/chodu i kamerę na encji gracza.

@@ -1,0 +1,5 @@
+#pragma once
+
+namespace ecs { class Registry; }
+
+void updateKeyboardInput(ecs::Registry& world);

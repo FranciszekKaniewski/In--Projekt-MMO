@@ -4,7 +4,10 @@
 #include "../ECS/ECS.h"
 #include "../ECS/AnimationSystem.h"
 #include "../ECS/CameraSystem.h"
+#include "../ECS/DirectionalAnimationSystem.h"
+#include "../ECS/MovementSystem.h"
 #include "../ECS/Components/CameraComponent.h"
+#include "../Input/KeyboardInputSystem.h"
 #include "../Renderer/ColliderDebugRenderer.h"
 #include "../Renderer/SpriteRenderer.h"
 #include "../UI/UILayer.h"
@@ -24,7 +27,10 @@ public:
 
     void handleEvents(App& app, SDL_Event &event) override {};
     void update(App& app) override {
+        updateKeyboardInput(world);
         updateWorld(app);
+        updateMovement(world, App::deltaTime);
+        updateDirectionalAnimations(world);
         updateAnimations(world, App::deltaTime);
         updateCameras(world);
     }

@@ -1,9 +1,9 @@
 #include "../../Engine/Scenes/GameScene.h"
-#include "../../Engine/ECS/Components/SpriteComponent.h"
-#include "../../Engine/ECS/Components/TransformComponent.h"
-#include "../../Engine/ECS/Components/VelocityComponent.h"
+#include "../../Engine/ECS/Components/KeyboardControlComponent.h"
+#include "../../Engine/ECS/Components/MovementBoundsComponent.h"
 #include "../../Engine/Scenes/SceneManager.h"
 #include "../../Engine/World/Map.h"
+#include "../Entities/Player.h"
 
 class Scene2 : public GameScene {
 private:
@@ -28,14 +28,24 @@ public:
 
         world.clear();
 
-        cameraEntity = world.createEntity();
+        const auto spawn = map.isLoaded()
+            ? map.position + math::Vector2{1350.0f, 1320.0f} * map.scale
+            : math::Vector2{width * 0.5f, centerY};
+        const auto player = spawnPlayer(world, spawn);
+        if (!player) return;
+        world.addComponent<KeyboardControlComponent>(player);
+        if (map.isLoaded()) {
+            auto& bounds = world.addComponent<MovementBoundsComponent>(player);
+            bounds.minimum = map.position + math::Vector2{10.0f, 5.0f};
+            bounds.maximum = map.position + mapSize - math::Vector2{10.0f, 5.0f};
+        }
+
+        // Camera and character belong to the same entity; this scene only composes them.
+        cameraEntity = player;
         auto& view = world.addComponent<CameraComponent>(cameraEntity);
         view.size = {width, static_cast<float>(screen.height)};
-
-        view.position = map.isLoaded()
-            ? map.position + math::Vector2{1350.0f, 1320.0f} * map.scale - view.size * 0.5f
-            : math::Vector2{};
-        view.following = false;
+        view.target = player;
+        view.following = true;
         view.bounded = map.isLoaded();
         view.bounds = {map.position.x, map.position.y, mapSize.x, mapSize.y};
         updateCameras(world);
@@ -46,29 +56,8 @@ protected:
         map.draw(app.renderer, camera());
     }
 
-    void updateWorld(App& app) override {
-        const float dt = App::deltaTime;
-
-        world.forEach<TransformComponent, VelocityComponent>(
-                [dt](ecs::Entity, TransformComponent& transform,
-                     const VelocityComponent& velocity) {
-                    transform.position += velocity.total() * dt;
-                });
-
-        const auto* keys = SDL_GetKeyboardState(nullptr);
-        if (auto* view = camera()) {
-            view->move({static_cast<float>(keys[SDL_SCANCODE_RIGHT] - keys[SDL_SCANCODE_LEFT]),
-                        static_cast<float>(keys[SDL_SCANCODE_DOWN] - keys[SDL_SCANCODE_UP])}, dt);
-        }
-    }
-
     void handleEvents(App& app, SDL_Event &event) override {
         if (event.type == SDL_KEYDOWN) {
-
-            if (event.key.keysym.sym == SDLK_f && !event.key.repeat) {
-                if (auto* view = camera()) view->following = !view->following;
-            }
-
             if (event.key.keysym.sym == SDLK_ESCAPE) {
                 app.sceneManager->changeScene(createScene1, app);
             }

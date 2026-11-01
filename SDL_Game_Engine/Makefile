@@ -1,11 +1,11 @@
-.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-resolution test-map test-camera test-memory test-frame-timing
+.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-player test-resolution test-map test-camera test-memory test-frame-timing
 .NOTPARALLEL:
 
 CXX := g++
 CXXFLAGS := -std=c++17 -g -static -static-libstdc++ -I Vendor -I Vendor/SDL2/include/SDL2 -isystem Vendor/Catch2
 ENGINE := $(wildcard Engine/*.cpp Engine/*/*.cpp)
 GAME := $(wildcard Game/*/*.cpp)
-HEADERS := $(wildcard Engine/*/*.h Engine/*/*/*.h Engine/*/*/*/*.h Tests/support/*.h Vendor/nlohmann/*.hpp Vendor/SDL2/include/SDL2/*.h)
+HEADERS := $(wildcard Engine/*/*.h Engine/*/*/*.h Engine/*/*/*/*.h Game/*/*.h Tests/support/*.h Vendor/nlohmann/*.hpp Vendor/SDL2/include/SDL2/*.h)
 SDL_LIBS := -L Vendor/SDL2/lib -lmingw32 -lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf \
 	-lsetupapi -lversion -limm32 -lole32 -loleaut32 -lwinmm -lgdi32 -luser32 -lshell32 -ladvapi32 -lRpcrt4
 TEST_COMMON := build/tests/catch.o build/tests/report.o
@@ -72,10 +72,11 @@ test-velocity: FILTER := [velocity]
 test-collider: FILTER := [collider]
 test-sprite: FILTER := [sprite]
 test-animation: FILTER := [animation]
+test-player: FILTER := [player]
 test-resolution: FILTER := [resolution]
 test-map: FILTER := [map]
 test-camera: FILTER := [camera]
 test-memory: FILTER := [memory]
 test-vector2 test-velocity: test-unit
-test-collider test-sprite test-animation test-resolution test-map test-camera test-memory: test-integration
+test-collider test-sprite test-animation test-player test-resolution test-map test-camera test-memory: test-integration
 test-frame-timing: test-e2e
