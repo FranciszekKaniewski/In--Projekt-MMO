@@ -24,6 +24,24 @@ Oczekiwany wynik: `{"type": "pong"}`. Opcje `--host` i `--port` pozwalają zmien
 adres. `server_listener:port().` w powłoce Erlanga pokazuje rzeczywisty port.
 Port `0` w konfiguracji oznacza, że system wybierze wolny port; używają go testy.
 
+## PostgreSQL w Dockerze
+
+Baza PostgreSQL działa w kontenerze, a serwer Erlanga lokalnie przez
+`rebar3 shell`. Compose zawiera wyłącznie usługę bazy danych. Instrukcja konfiguracji bazy i dane połączenia znajdują
+się w [Docs/database.md](../Docs/database.md).
+
+W głównym katalogu repozytorium, przy istniejącym lokalnym pliku `.env`:
+
+```powershell
+docker compose up -d --wait db
+```
+
+Na nowej maszynie skopiuj `.env.example` do `.env` i ustaw hasło.
+Plik `.env` jest pomijany przez Git. Baza jest domyślnie dostępna na
+`127.0.0.1:5432`; dane przechowuje nazwany wolumen. `docker compose down`
+zachowuje dane bazy. Obecny serwer ping–pong będzie można podłączyć do
+PostgreSQL w osobnym kroku.
+
 ## Moduł, proces i gen_server
 
 Moduł to plik z funkcjami, np. `server_connection.erl`. Proces to uruchomiona,
