@@ -16,22 +16,21 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
-%% sup_flags() = #{strategy => strategy(),         % optional
-%%                 intensity => non_neg_integer(), % optional
-%%                 period => pos_integer()}        % optional
-%% child_spec() = #{id => child_id(),       % mandatory
-%%                  start => mfargs(),      % mandatory
-%%                  restart => restart(),   % optional
-%%                  shutdown => shutdown(), % optional
-%%                  type => worker(),       % optional
-%%                  modules => modules()}   % optional
 init([]) ->
     SupFlags = #{
-        strategy => one_for_all,
-        intensity => 0,
-        period => 1
+        strategy => rest_for_one,
+        intensity => 5,
+        period => 10
     },
-    ChildSpecs = [],
+    %% The listener depends on the connection supervisor. Restart it too if
+    %% that supervisor fails; a listener restart can keep existing clients.
+    ChildSpecs = [
+        #{id => server_connection_sup,
+          start => {server_connection_sup, start_link, []},
+          type => supervisor},
+        #{id => server_listener,
+          start => {server_listener, start_link, []}}
+    ],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions

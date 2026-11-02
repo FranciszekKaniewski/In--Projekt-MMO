@@ -1,13 +1,13 @@
 {application, server, [
-    {description, "An OTP application"},
+    {description, "SDL game TCP server"},
     {vsn, "0.1.0"},
-    {registered, []},
+    {registered, [server_sup, server_connection_sup, server_listener]},
     {mod, {server_app, []}},
     {applications, [
         kernel,
         stdlib
     ]},
-    {env, []},
+    {env, [{ip, {127, 0, 0, 1}}, {port, 4000}]},
     {modules, []},
     {licenses, ["Apache-2.0"]},
     {links, []}
