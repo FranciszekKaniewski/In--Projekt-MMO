@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -9,6 +10,7 @@
 #include "../../Core/Font.h"
 #include "../../Core/App.h"
 #include "../../Renderer/TextureManager.h"
+#include "../../Text/Utf8.h"
 
 class Input : public UIElement {
 public:
@@ -27,6 +29,16 @@ private:
     int scrollX = 0;
     bool focused = false;
     Uint32 blinkStart = 0;
+    std::size_t maxLength = std::numeric_limits<std::size_t>::max();
+
+    void insertText(const std::string& value) {
+        const auto used = utf8::count(text);
+        const auto entered = utf8::singleLine(singleLine(value), used < maxLength ? maxLength - used : 0);
+        if (entered.empty()) return;
+        text.insert(cursor, entered);
+        cursor += entered.size();
+        textChanged();
+    }
 
     static bool isContinuation(char c) {
         return (static_cast<unsigned char>(c) & 0xC0) == 0x80;
@@ -111,7 +123,7 @@ private:
         const std::string prefix = displayText(cursor);
         TTF_SizeUTF8(font.font, prefix.c_str(), &width, &height);
 
-        return width;
+        return width / std::max(1, textRasterScale);
     }
 
 public:
@@ -119,6 +131,8 @@ public:
 
     int padding = 10;
     int cornerRadius = 8;
+    // Raster pixels per logical UI pixel; defaults to normal-sized font rendering.
+    int textRasterScale = 1;
 
     SDL_Color bgColor = {255, 255, 255, 255};
     SDL_Color borderColor = {170, 170, 170, 255};
@@ -152,8 +166,15 @@ public:
         return text;
     }
 
+    std::size_t getLength() const { return utf8::count(text); }
+    std::size_t getMaxLength() const { return maxLength; }
+    void setMaxLength(std::size_t value) {
+        maxLength = value;
+        setText(text);
+    }
+
     void setText(const std::string& value) {
-        const std::string newText = singleLine(value);
+        const std::string newText = utf8::singleLine(singleLine(value), maxLength);
 
         if (text == newText) return;
 
@@ -203,22 +224,24 @@ public:
         if (!focused) return false;
 
         if (event.type == SDL_TEXTINPUT) {
-            const std::string entered = singleLine(event.text.text);
-
-            if (!entered.empty()) {
-                text.insert(cursor, entered);
-                cursor += entered.size();
-
-                textChanged();
-            }
-
+            insertText(event.text.text);
             return true;
         }
+
+        if (event.type == SDL_TEXTEDITING) return true;
 
         if (event.type == SDL_KEYUP) return true;
         if (event.type != SDL_KEYDOWN) return false;
 
         blinkStart = SDL_GetTicks();
+
+        if (event.key.keysym.sym == SDLK_v && (event.key.keysym.mod & KMOD_CTRL)) {
+            if (char* clipboard = SDL_GetClipboardText()) {
+                insertText(clipboard);
+                SDL_free(clipboard);
+            }
+            return true;
+        }
 
         switch (event.key.keysym.sym) {
             case SDLK_BACKSPACE:
@@ -315,12 +338,15 @@ public:
         if (content.w <= 2 || content.h <= 0 || !font.font) return;
 
         int width = 0;
-        int height = TTF_FontHeight(font.font);
+        const int rasterScale = std::max(1, textRasterScale);
+        int height = (TTF_FontHeight(font.font) + rasterScale - 1) / rasterScale;
 
         if (texture) {
             SDL_QueryTexture(
                     texture, nullptr, nullptr, &width, &height
             );
+            width = (width + rasterScale - 1) / rasterScale;
+            height = (height + rasterScale - 1) / rasterScale;
         }
 
         const int caretX = cursorWidth();

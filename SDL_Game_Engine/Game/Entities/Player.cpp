@@ -2,6 +2,7 @@
 
 #include "../../Engine/ECS/Components/AnimationComponent.h"
 #include "../../Engine/ECS/Components/ColliderComponent.h"
+#include "../../Engine/ECS/Components/ChatSpeakerComponent.h"
 #include "../../Engine/ECS/Components/DirectionalAnimationComponent.h"
 #include "../../Engine/ECS/Components/MovementComponent.h"
 #include "../../Engine/ECS/Components/MovementInputComponent.h"
@@ -34,6 +35,7 @@ ecs::Entity spawnPlayer(ecs::Registry& world, math::Vector2 position) {
 
     const auto player = world.createEntity();
     world.addComponent<PlayerComponent>(player);
+    world.addComponent<ChatSpeakerComponent>(player);
     world.addComponent<TransformComponent>(player, position);
     world.addComponent<VelocityComponent>(player);
     world.addComponent<MovementInputComponent>(player);

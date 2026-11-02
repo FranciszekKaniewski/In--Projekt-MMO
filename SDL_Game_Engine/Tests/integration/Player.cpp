@@ -95,9 +95,10 @@ struct PlayerSDLFixture {
     PlayerSDLFixture() {
         SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
         REQUIRE(SDL_Init(SDL_INIT_VIDEO) == 0);
+        REQUIRE(TTF_Init() == 0);
         REQUIRE((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) != 0);
     }
-    ~PlayerSDLFixture() { IMG_Quit(); SDL_Quit(); }
+    ~PlayerSDLFixture() { TTF_Quit(); IMG_Quit(); SDL_Quit(); }
 };
 
 class PlayerCanvas {

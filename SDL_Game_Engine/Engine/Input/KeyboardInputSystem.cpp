@@ -6,7 +6,7 @@
 
 #include <SDL.h>
 
-void updateKeyboardInput(ecs::Registry& world) {
+void updateKeyboardInput(ecs::Registry& world, bool enabled) {
     const auto* keys = SDL_GetKeyboardState(nullptr);
     const math::Vector2 direction{
         static_cast<float>((keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) -
@@ -15,7 +15,7 @@ void updateKeyboardInput(ecs::Registry& world) {
                            (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]))};
 
     world.forEach<KeyboardControlComponent, MovementInputComponent>(
-        [direction](ecs::Entity, const KeyboardControlComponent&, MovementInputComponent& input) {
-            input.direction = direction;
+        [direction, enabled](ecs::Entity, const KeyboardControlComponent&, MovementInputComponent& input) {
+            input.direction = enabled ? direction : math::Vector2{};
         });
 }

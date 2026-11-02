@@ -1,5 +1,9 @@
 # System UI
 
+Czat sceny gry jest opisany w [Engine/Chat/README.md](../Chat/README.md).
+`ChatOverlay` korzysta z istniejącego `Input`; jego `setMaxLength()` ogranicza liczbę znaków Unicode
+również podczas wklejania przez Ctrl+V. Domyślnie pozostałe pola zachowują brak limitu.
+
 UI budujesz w C++: tworzysz scenę, dodajesz panele i umieszczasz w nich kontrolki.
 Wygląd opisujesz prostokątami, kolorami, fontami i opcjonalnymi obrazami; zachowanie — callbackami.
 Elementy twórz po inicjalizacji SDL, renderera i fontów, najwygodniej w `onEnter()` sceny.

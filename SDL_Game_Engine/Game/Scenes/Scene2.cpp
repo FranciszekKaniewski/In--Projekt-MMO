@@ -49,6 +49,7 @@ public:
         view.bounded = map.isLoaded();
         view.bounds = {map.position.x, map.position.y, mapSize.x, mapSize.y};
         updateCameras(world);
+        enableChat(player);
     }
 
 protected:
@@ -56,7 +57,7 @@ protected:
         map.draw(app.renderer, camera());
     }
 
-    void handleEvents(App& app, SDL_Event &event) override {
+    void handleWorldEvents(App& app, SDL_Event &event) override {
         if (event.type == SDL_KEYDOWN) {
             if (event.key.keysym.sym == SDLK_ESCAPE) {
                 app.sceneManager->changeScene(createScene1, app);

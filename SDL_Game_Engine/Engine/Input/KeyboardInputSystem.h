@@ -2,4 +2,4 @@
 
 namespace ecs { class Registry; }
 
-void updateKeyboardInput(ecs::Registry& world);
+void updateKeyboardInput(ecs::Registry& world, bool enabled = true);
