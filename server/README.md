@@ -1,12 +1,29 @@
-# Serwer gry — ping → pong
+# Serwer gry — konta i sesje
 
-Serwer TCP przyjmuje wiele połączeń i odpowiada na komunikat `ping` komunikatem
-`pong`. Wymaga Erlang/OTP 27 lub nowszego (moduł `json`) oraz `rebar3`.
+Serwer obsługuje ping, rejestrację, logowanie, listę i wybór własnych postaci
+oraz wylogowanie. Używa TLS, PostgreSQL i sesji przypisanej do połączenia.
+Wymaga Erlang/OTP 27+, `rebar3` i kompilatora C dla biblioteki Argon2id.
+Na Windowsie kompilacja używa GCC z MSYS2 (`C:/msys64/mingw64/bin/gcc.exe`)
+lub kompilatora wskazanego zmienną `CC` (ścieżka do programu, bez argumentów).
 
 ## Uruchomienie
 
+Na nowej maszynie skopiuj `.env.example` do `.env` i ustaw hasło bazy.
+Uruchom bazę i zastosuj migracje 001 i 002 według [db/README.md](db/README.md).
+Lokalny certyfikat utwórz jednorazowo w PowerShellu 7:
+
+```powershell
+./tools/New-DevCertificate.ps1
+```
+
+Pliki `priv/tls` są pomijane przez Git. `ca.crt` służy klientom do weryfikacji
+certyfikatu dla `localhost` i `127.0.0.1`; klucz CA nie jest zapisywany.
+Certyfikaty z `test/fixtures` są wyłącznie danymi testowymi.
+Na wdrożeniu ustaw własny certyfikat i klucz przez `GAME_TLS_CERTFILE`
+i `GAME_TLS_KEYFILE`. Serwer przyjmuje wyłącznie TLS 1.2/1.3.
+
 Jeżeli działa poprzednia wersja serwera, zakończ jej powłokę przez `q().`.
-W terminalu otwartym w tym katalogu uruchom:
+W katalogu `server` uruchom:
 
 ```powershell
 rebar3 shell
@@ -23,6 +40,49 @@ python tools/ping.py
 Oczekiwany wynik: `{"type": "pong"}`. Opcje `--host` i `--port` pozwalają zmienić
 adres. `server_listener:port().` w powłoce Erlanga pokazuje rzeczywisty port.
 Port `0` w konfiguracji oznacza, że system wybierze wolny port; używają go testy.
+`--cafile` wskazuje zaufany certyfikat CA, domyślnie `priv/tls/ca.crt`.
+
+## Logowanie i autoryzacja
+
+```powershell
+python tools/auth.py register Franek
+python tools/auth.py login Franek
+```
+
+Hasło jest odczytywane bez wyświetlania i bez argumentów wiersza poleceń.
+Po zalogowaniu polecenia `list`, `list AFTER_ID`, `select ID` i `logout`
+pozwalają przetestować sesję. Rejestracja tworzy samo konto, bez postaci,
+i nie loguje automatycznie. Wiadomości JSON opisuje [protokół](../Shared/protocol.md).
+
+Login ma 3–32 znaki bez białych i sterujących znaków; wielkość liter nie
+rozróżnia kont. Nowe hasło ma 8–128 znaków Unicode, co najmniej jedną wielką
+literę i jeden znak specjalny (znak interpunkcyjny lub symbol, np. `!`, `@`, `#`).
+Spacja nie zastępuje znaku specjalnego. Limit wynosi 512 bajtów UTF-8.
+Klient pokazuje wymagania i przyczynę odrzucenia przed wysłaniem rejestracji.
+Logowanie weryfikuje zapisany hash, również dla wcześniej utworzonych kont.
+`server_password` używa Argon2id v19: 19 MiB pamięci, 2 iteracje, 1 wątek,
+losowa sól 16 bajtów. Zapis PHC zawiera parametry i sól.
+Przy braku konta serwer weryfikuje hash zastępczy. Błędne dane logowania
+dają wspólny błąd `invalid_credentials`.
+
+Zweryfikowane `user_id` i wybrana postać pozostają w procesie połączenia.
+Lista i wybór postaci korzystają z tego `user_id`, a nie z pola klienta.
+Wybór cudzej i nieistniejącej postaci daje ten sam `character_not_found`.
+Wylogowanie i wygaśnięcie usuwają konto oraz wybór postaci z sesji.
+Rozłączenie lub restart serwera wymaga ponownego logowania.
+Wybór postaci na tym etapie nie uruchamia jeszcze symulacji świata.
+
+`config/sys.config` ustala: 60 s na logowanie, 8 h ważności sesji,
+5 prób logowania/min/konto, 30/min/IP i 5 rejestracji/h/IP.
+Limity obejmują również udane próby i obowiązują między połączeniami.
+Maksymalnie 4 operacje hashowania/weryfikacji działają jednocześnie;
+serwer przyjmuje maksymalnie 256 połączeń. Limity są lokalne dla tego
+węzła Erlanga i zerują się przy restarcie.
+
+Zależność `jargon` 1.1.0 jest przypięta w `rebar.lock`.
+`tools/build_jargon.escript` buduje jej referencyjny kod C bez powłoki Unix
+i poprawia numer wersji w wrapperze z dziesiętnego `13` na `0x13` (v19).
+Test sprawdza wynik względem opublikowanego wektora Argon2id.
 
 ## PostgreSQL w Dockerze
 
@@ -30,7 +90,7 @@ Baza PostgreSQL działa w kontenerze, a serwer Erlanga lokalnie przez
 `rebar3 shell`. Compose zawiera wyłącznie usługę bazy danych. Instrukcja konfiguracji bazy i dane połączenia znajdują
 się w [Docs/database.md](../Docs/database.md).
 
-W głównym katalogu repozytorium, przy istniejącym lokalnym pliku `.env`:
+W katalogu `server`, gdzie znajdują się `compose.yaml` i lokalny plik `.env`:
 
 ```powershell
 docker compose up -d --wait db
@@ -39,8 +99,14 @@ docker compose up -d --wait db
 Na nowej maszynie skopiuj `.env.example` do `.env` i ustaw hasło.
 Plik `.env` jest pomijany przez Git. Baza jest domyślnie dostępna na
 `127.0.0.1:5432`; dane przechowuje nazwany wolumen. `docker compose down`
-zachowuje dane bazy. Obecny serwer ping–pong będzie można podłączyć do
-PostgreSQL w osobnym kroku.
+zachowuje dane bazy. `server_config` czyta `.env`; zmienne środowiska procesu
+mają pierwszeństwo. `server_db` utrzymuje jedno połączenie `epgsql`,
+serializuje zapytania i odtwarza połączenie po awarii. Błąd bazy daje
+`service_unavailable`, bez uwierzytelnienia klienta.
+
+Migracje kont i postaci opisuje [db/README.md](db/README.md).
+Tabela `public.characters` pozwala zapisać wiele postaci na konto oraz mapę,
+pozycję i kierunek zgodne z klientem SDL.
 
 ## Moduł, proces i gen_server
 
@@ -57,11 +123,11 @@ funkcje, które ta pętla wywołuje:
 | `init/1` | Przy uruchomieniu procesu; tworzy początkowy stan |
 | `handle_call/3` | Gdy inny proces wywoła `gen_server:call`; oczekuje odpowiedzi |
 | `handle_cast/2` | Gdy inny proces wywoła `gen_server:cast`; nie czeka na odpowiedź |
-| `handle_info/2` | Dla pozostałych wiadomości, m.in. danych TCP i timerów |
+| `handle_info/2` | Dla pozostałych wiadomości, m.in. danych TLS i timerów |
 | `terminate/2` | Przy obsługiwanym zakończeniu procesu; sprząta zasoby |
 
 `-behaviour(gen_server).` deklaruje używany mechanizm OTP, a `-export([...]).`
-wskazuje funkcje dostępne spoza modułu. Dane TCP trafiają do `handle_info/2`,
+wskazuje funkcje dostępne spoza modułu. Dane TLS trafiają do `handle_info/2`,
 a nie do `handle_call/3`.
 
 ## Krok 1: uruchomienie aplikacji
@@ -72,6 +138,8 @@ OTP wywołuje `server_app:start/2`, który uruchamia `server_sup:start_link/0`.
 
 Supervisor uruchamia i nadzoruje swoje procesy potomne:
 
+- `server_db` utrzymuje połączenie z PostgreSQL.
+- `server_auth_guard` ogranicza próby logowania i liczbę operacji Argon2.
 - `server_connection_sup` nadzoruje procesy obsługujące klientów.
 - `server_listener` otwiera port i uruchamia proces przyjmujący połączenia.
 
@@ -83,7 +151,7 @@ uruchamiać bez końca stale psującego się podsystemu.
 
 ## Krok 2: otwarcie portu
 
-`server_listener:init/1` odczytuje konfigurację i wywołuje `gen_tcp:listen/2`.
+`server_listener:init/1` odczytuje konfigurację i wywołuje `ssl:listen/2`.
 Wynikiem jest socket nasłuchujący, z którego można przyjmować nowe połączenia.
 
 Istotne opcje:
@@ -95,12 +163,12 @@ Istotne opcje:
 - `{nodelay, true}`: małe wysyłane wiadomości nie czekają na agregowanie przez Nagle'a.
 
 `spawn_link` uruchamia powiązany proces wykonujący `accept_loop/1`.
-To w nim blokuje się `gen_tcp:accept/1`; sam `gen_server` listenera pozostaje
+To w nim blokuje się `ssl:transport_accept/1`; sam `gen_server` listenera pozostaje
 zdolny do obsługi innych wiadomości, np. zapytania o port.
 
 ## Krok 3: połączenie klienta
 
-`ping.py` wywołuje `socket.create_connection`. `gen_tcp:accept/1` po stronie
+`ping.py` otwiera TCP i następnie TLS z weryfikacją certyfikatu serwera. `ssl:transport_accept/1` po stronie
 serwera zwraca wtedy nowy socket reprezentujący połączenie z tym klientem.
 Socket nasłuchujący pozostaje otwarty, więc można przyjmować następnych klientów.
 
@@ -112,22 +180,25 @@ To lekkie procesy Erlanga działające we wspólnej maszynie wirtualnej.
 ## Krok 4: przekazanie socketu
 
 Zaakceptowany socket początkowo należy do procesu, który wykonał `accept`.
-`gen_tcp:controlling_process(Socket, Pid)` przekazuje go procesowi połączenia.
+`ssl:controlling_process(Socket, Pid)` przekazuje go procesowi połączenia.
 To właściciel otrzymuje później wiadomości o danych TCP.
 
 Dopiero po przekazaniu socketu listener wywołuje `server_connection:activate/1`.
-Ta funkcja wysyła `cast`, a `handle_cast/2` ustawia `{active, once}`:
+Ta funkcja wysyła `cast`, a `handle_cast/2` wykonuje handshake TLS
+z limitem 5 s i ustawia `{active, once}`:
 jedna pełna ramka zostanie dostarczona do procesu jako wiadomość.
 
 Stan procesu wygląda w przybliżeniu tak:
 
 ```erlang
-#{socket => Socket, ready => true, timer => Timer}
+#{socket => Socket, ready => true, timer => Timer,
+  user => undefined, character_id => undefined, session_deadline => undefined}
 ```
 
 `init/1` wcześniej ustawił pięciosekundowy timer oczekiwania na aktywację.
 Aktywacja go anuluje. Ten timer zabezpiecza przekazanie socketu; nie jest
-limitem bezczynności już aktywnego klienta.
+limitem bezczynności już aktywnego klienta. Po handshake rusza osobny
+timer na logowanie; po logowaniu zastępuje go timer ważności sesji.
 
 ## Krok 5: wysłanie ping
 
@@ -148,11 +219,11 @@ usuwa nagłówek przed przekazaniem treści do naszego kodu.
 Do procesu połączenia trafia wiadomość:
 
 ```erlang
-{tcp, Socket, Data}
+{ssl, Socket, Data}
 ```
 
 `gen_server` wybiera pasującą funkcję `handle_info/2` w `server_connection`.
-`Data` zawiera już sam JSON. Funkcja wywołuje `server_protocol:reply(Data)`.
+`Data` zawiera już sam JSON. Funkcja wywołuje `server_protocol:handle(Data, State)`, zwracające odpowiedź i nowy stan sesji.
 
 `server_protocol` dekoduje JSON do mapy i dopasowuje wzorzec:
 
@@ -175,7 +246,7 @@ Protokół rozpoznaje treść; sam nie zarządza połączeniem ani nie wywołuje
 
 ## Krok 7: odpowiedź i następna wiadomość
 
-`server_connection` wywołuje `gen_tcp:send(Socket, Reply)`.
+`server_connection` wywołuje `ssl:send(Socket, Reply)`.
 Opcja `{packet, 4}` automatycznie dodaje nagłówek długości do odpowiedzi.
 Python odczytuje najpierw cztery bajty, potem wskazaną liczbę bajtów treści,
 a następnie dekoduje JSON i wypisuje wynik.
@@ -191,7 +262,7 @@ Bez tego kolejne dane nie byłyby dostarczane jako wiadomości. Zwraca też:
 ```
 
 To informacja dla `gen_server`: kontynuuj z tym stanem. Nazwa `noreply` nie
-wyklucza odpowiedzi TCP — wysłaliśmy ją już samodzielnie przez `gen_tcp:send`.
+wyklucza odpowiedzi TCP — wysłaliśmy ją już samodzielnie przez `ssl:send`.
 Nie odpowiadamy tu na żadne oczekujące `gen_server:call`.
 
 ## Krok 8: błędy i rozłączenie
@@ -200,7 +271,7 @@ Nieznany typ, niepoprawna struktura i uszkodzony JSON dają odpowiedź błędu
 opisaną w [protokole](../Shared/protocol.md). Połączenie pozostaje wtedy otwarte.
 Ramka przekraczająca limit długości powoduje zamknięcie połączenia.
 
-Po zamknięciu klienta do serwera trafia `{tcp_closed, Socket}`.
+Po zamknięciu klienta do serwera trafia `{ssl_closed, Socket}`.
 `{stop, normal, State}` kończy proces połączenia, a jego `terminate/2` zamyka
 socket i anuluje timer. Specyfikacja `restart => temporary` oznacza, że proces
 połączenia nie zostanie odtworzony ze starym, zamkniętym socketem.
@@ -211,9 +282,19 @@ połączenia nie zostanie odtworzony ze starym, zamkniętym socketem.
 rebar3 eunit
 ```
 
-Dziesięć testów sprawdza prawdziwe połączenia TCP: ping, wielu klientów,
+Testy sprawdzają prawdziwe połączenia TLS: ping, wielu klientów,
 fragmentację i łączenie ramek, błędy, granice rozmiaru, rozłączenia i izolację
-awarii. Komunikaty `join` i `chat_send` są obecnie nieobsługiwanymi typami.
+awarii, certyfikaty, timeouty i ograniczanie prób logowania. Komunikaty `join` i `chat_send` są obecnie nieobsługiwanymi typami.
 
-Port gry używa własnego protokołu TCP. HTTP POST w Postmanie ma inny format
+Pełne testy kont wymagają działającego Dockera i lokalnego `.env`:
+
+```powershell
+./tools/Test-Database.ps1
+```
+
+Skrypt tworzy osobną bazę, stosuje migracje, uruchamia testy i usuwa bazę
+w bloku `finally`. Sprawdza również logowanie, izolację kont, wylogowanie,
+wygaśnięcie sesji i awarię bazy. Nie zmienia danych `sdl_game`.
+
+Port gry używa własnego protokołu po TLS. HTTP POST w Postmanie ma inny format
 wiadomości; skrypt `ping.py` wysyła ramkę oczekiwaną przez ten serwer.
