@@ -21,3 +21,5 @@ rebar3.crashdump
 .env
 .env.*
 !.env.example
+priv/tls/
+__pycache__/

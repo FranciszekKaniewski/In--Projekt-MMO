@@ -1,52 +1,71 @@
 -module(server_connection).
 -behaviour(gen_server).
-
 -export([start_link/1, activate/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, format_status/1]).
 
-start_link(Socket) ->
-    gen_server:start_link(?MODULE, Socket, []).
-
-activate(Pid) ->
-    gen_server:cast(Pid, activate).
+start_link(Socket) -> gen_server:start_link(?MODULE, Socket, []).
+activate(Pid) -> gen_server:cast(Pid, activate).
 
 init(Socket) ->
+    %% Hide credentials from process introspection and redact crash reports below.
+    process_flag(sensitive, true),
     Timer = erlang:start_timer(5000, self(), activate),
-    {ok, #{socket => Socket, ready => false, timer => Timer}}.
+    {ok, #{socket => Socket, ready => false, timer => Timer,
+           user => undefined, character_id => undefined, session_deadline => undefined}}.
 
-handle_call(_Request, _From, State) ->
-    {reply, {error, unsupported_request}, State}.
+handle_call(_, _, State) -> {reply, {error, unsupported_request}, State}.
 
 handle_cast(activate, #{ready := false, socket := Socket, timer := Timer} = State) ->
     erlang:cancel_timer(Timer),
-    case inet:setopts(Socket, [{active, once}]) of
-        ok -> {noreply, State#{ready => true}};
-        {error, _Reason} -> {stop, normal, State}
-    end;
-handle_cast(_Message, State) ->
-    {noreply, State}.
-
-handle_info({tcp, Socket, Data}, #{socket := Socket, ready := true} = State) ->
-    Reply = server_protocol:reply(Data),
-    case gen_tcp:send(Socket, Reply) of
-        ok ->
-            %% Receive one complete frame at a time, then rearm reception.
-            case inet:setopts(Socket, [{active, once}]) of
-                ok -> {noreply, State};
-                {error, _Reason} -> {stop, normal, State}
+    case ssl:handshake(Socket, 5000) of
+        {ok, SecureSocket} ->
+            case {ssl:peername(SecureSocket), ssl:setopts(SecureSocket, [{active, once}])} of
+                {{ok, {IP, _}}, ok} ->
+                    {noreply, start_timer(authentication,
+                        State#{socket => SecureSocket, ready => true, ip => IP})};
+                _ -> {stop, normal, State}
             end;
-        {error, _Reason} ->
-            {stop, normal, State}
+        {error, _} -> {stop, normal, State}
     end;
-handle_info({tcp_closed, Socket}, #{socket := Socket} = State) ->
-    {stop, normal, State};
-handle_info({tcp_error, Socket, _Reason}, #{socket := Socket} = State) ->
-    {stop, normal, State};
-handle_info({timeout, Timer, activate}, #{ready := false, timer := Timer} = State) ->
-    {stop, normal, State};
-handle_info(_Message, State) ->
-    {noreply, State}.
+handle_cast(_, State) -> {noreply, State}.
 
-terminate(_Reason, #{socket := Socket, timer := Timer}) ->
+handle_info({ssl, Socket, Data}, #{socket := Socket, ready := true} = State) ->
+    {Reply, Updated} = server_protocol:handle(Data, State),
+    Next = update_timer(State, Updated),
+    case ssl:send(Socket, json:encode(Reply)) of
+        ok ->
+            case ssl:setopts(Socket, [{active, once}]) of
+                ok -> {noreply, Next};
+                {error, _} -> {stop, normal, Next}
+            end;
+        {error, _} -> {stop, normal, Next}
+    end;
+handle_info({ssl_closed, Socket}, #{socket := Socket} = State) -> {stop, normal, State};
+handle_info({ssl_error, Socket, _}, #{socket := Socket} = State) -> {stop, normal, State};
+handle_info({timeout, Timer, session}, #{timer := Timer, socket := Socket} = State) ->
+    case ssl:send(Socket, json:encode(server_protocol:error_message(session_expired))) of
+        ok -> {noreply, start_timer(authentication, server_protocol:clear_session(State))};
+        _ -> {stop, normal, State}
+    end;
+handle_info({timeout, Timer, _}, #{timer := Timer} = State) -> {stop, normal, State};
+handle_info(_, State) -> {noreply, State}.
+
+update_timer(#{session_deadline := Previous}, #{session_deadline := Previous} = Next) -> Next;
+update_timer(#{timer := Timer}, Next) ->
     erlang:cancel_timer(Timer),
-    gen_tcp:close(Socket).
+    Kind = case maps:get(user, Next) of undefined -> authentication; _ -> session end,
+    start_timer(Kind, Next).
+
+start_timer(authentication, State) ->
+    State#{timer => erlang:start_timer(
+        application:get_env(server, auth_timeout_ms, 60000), self(), authentication)};
+start_timer(session, #{session_deadline := Deadline} = State) ->
+    Delay = max(0, Deadline - erlang:monotonic_time(millisecond)),
+    State#{timer => erlang:start_timer(Delay, self(), session)}.
+
+terminate(_, #{socket := Socket, timer := Timer}) ->
+    erlang:cancel_timer(Timer),
+    ssl:close(Socket).
+
+format_status(Status) ->
+    Status#{state => redacted, message => redacted, reason => redacted, log => []}.

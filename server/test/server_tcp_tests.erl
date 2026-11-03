@@ -19,22 +19,10 @@ tcp_test_() ->
      end}.
 
 start_server() ->
-    case application:load(server) of
-        ok -> ok;
-        {error, {already_loaded, server}} -> ok
-    end,
-    PreviousEnv = [{Key, application:get_env(server, Key)} || Key <- [ip, port]],
-    ok = application:set_env(server, ip, {127, 0, 0, 1}),
-    ok = application:set_env(server, port, 0),
-    {ok, _Apps} = application:ensure_all_started(server),
-    {server_listener:port(), PreviousEnv}.
+    server_test_support:start([]).
 
-stop_server({_Port, PreviousEnv}) ->
-    ok = application:stop(server),
-    lists:foreach(fun
-        ({Key, {ok, Value}}) -> application:set_env(server, Key, Value);
-        ({Key, undefined}) -> application:unset_env(server, Key)
-    end, PreviousEnv).
+stop_server(Context) ->
+    server_test_support:stop(Context).
 
 ping_pong(Port) ->
     with_client(Port, fun(Socket) ->
@@ -47,7 +35,7 @@ multiple_clients(Port) ->
         with_client(Port, fun(Second) ->
             assert_pong(First),
             assert_pong(Second),
-            ok = gen_tcp:close(First),
+            ok = ssl:close(First),
             assert_pong(Second)
         end)
     end).
@@ -56,19 +44,19 @@ fragmented_frame(Port) ->
     with_raw_client(Port, fun(Socket) ->
         <<FirstByte:1/binary, HeaderRest:3/binary, Body/binary>> = frame(ping()),
         <<BodyStart:3/binary, BodyRest/binary>> = Body,
-        ok = gen_tcp:send(Socket, FirstByte),
-        ?assertEqual({error, timeout}, gen_tcp:recv(Socket, 0, 20)),
-        ok = gen_tcp:send(Socket, [HeaderRest, BodyStart]),
-        ?assertEqual({error, timeout}, gen_tcp:recv(Socket, 0, 20)),
-        ok = gen_tcp:send(Socket, BodyRest),
-        ok = inet:setopts(Socket, [{packet, 4}]),
+        ok = ssl:send(Socket, FirstByte),
+        ?assertEqual({error, timeout}, ssl:recv(Socket, 0, 20)),
+        ok = ssl:send(Socket, [HeaderRest, BodyStart]),
+        ?assertEqual({error, timeout}, ssl:recv(Socket, 0, 20)),
+        ok = ssl:send(Socket, BodyRest),
+        ok = ssl:setopts(Socket, [{packet, 4}]),
         ?assertEqual(pong(), receive_message(Socket))
     end).
 
 coalesced_frames(Port) ->
     with_raw_client(Port, fun(Socket) ->
-        ok = gen_tcp:send(Socket, [frame(ping()), frame(ping())]),
-        ok = inet:setopts(Socket, [{packet, 4}]),
+        ok = ssl:send(Socket, [frame(ping()), frame(ping())]),
+        ok = ssl:setopts(Socket, [{packet, 4}]),
         ?assertEqual(pong(), receive_message(Socket)),
         ?assertEqual(pong(), receive_message(Socket))
     end).
@@ -86,7 +74,7 @@ invalid_messages(Port) ->
              {<<"{\"type\":\"chat_send\",\"text\":\"hello\"}">>, <<"unknown_message_type">>}],
     with_client(Port, fun(Socket) ->
         lists:foreach(fun({Data, Code}) ->
-            ok = gen_tcp:send(Socket, Data),
+            ok = ssl:send(Socket, Data),
             ?assertEqual(#{<<"type">> => <<"error">>, <<"code">> => Code},
                          receive_message(Socket)),
             assert_pong(Socket)
@@ -100,7 +88,7 @@ maximum_frame(Port) ->
     Data = json:encode(Base#{<<"padding">> => Padding}),
     ?assertEqual(4096, iolist_size(Data)),
     with_client(Port, fun(Socket) ->
-        ok = gen_tcp:send(Socket, Data),
+        ok = ssl:send(Socket, Data),
         ?assertEqual(pong(), receive_message(Socket))
     end).
 
@@ -108,8 +96,8 @@ oversized_frame(Port) ->
     with_client(Port, fun(Healthy) ->
         with_raw_client(Port, fun(Socket) ->
             %% The server rejects the length without waiting for the body.
-            ok = gen_tcp:send(Socket, <<4097:32/unsigned-big>>),
-            ?assertEqual({error, closed}, gen_tcp:recv(Socket, 0, 1000))
+            ok = ssl:send(Socket, <<4097:32/unsigned-big>>),
+            ?assertEqual({error, closed}, ssl:recv(Socket, 0, 1000))
         end),
         assert_pong(Healthy)
     end).
@@ -120,7 +108,7 @@ disconnect_cleanup(Port) ->
     assert_pong(Socket),
     [{_Id, Pid, worker, _Modules}] = supervisor:which_children(server_connection_sup),
     Monitor = erlang:monitor(process, Pid),
-    ok = gen_tcp:close(Socket),
+    ok = ssl:close(Socket),
     receive
         {'DOWN', Monitor, process, Pid, Reason} -> ?assertEqual(normal, Reason)
     after 1000 ->
@@ -142,7 +130,7 @@ worker_failure(Port) ->
             after 1000 ->
                 error(worker_did_not_exit)
             end,
-            ?assertEqual({error, closed}, gen_tcp:recv(First, 0, 1000)),
+            ?assertEqual({error, closed}, ssl:recv(First, 0, 1000)),
             assert_pong(Second),
             await(fun() -> connection_count() =:= 1 end),
             with_client(Port, fun assert_pong/1)
@@ -172,22 +160,21 @@ with_raw_client(Port, Fun) ->
 with_socket(Port, Packet, Fun) ->
     {ok, Socket} = connect(Port, Packet),
     try Fun(Socket)
-    after gen_tcp:close(Socket)
+    after ssl:close(Socket)
     end.
 
 connect(Port, Packet) ->
-    gen_tcp:connect({127, 0, 0, 1}, Port,
-                    [binary, {packet, Packet}, {active, false}], 1000).
+    server_test_support:connect(Port, Packet).
 
 assert_pong(Socket) ->
-    ok = gen_tcp:send(Socket, ping()),
+    ok = ssl:send(Socket, ping()),
     ?assertEqual(pong(), receive_message(Socket)).
 
 ping() -> <<"{\"type\":\"ping\"}">>.
 pong() -> #{<<"type">> => <<"pong">>}.
 
 receive_message(Socket) ->
-    {ok, Data} = gen_tcp:recv(Socket, 0, 1000),
+    {ok, Data} = ssl:recv(Socket, 0, 1000),
     json:decode(Data).
 
 frame(Data) ->

@@ -1,0 +1,9 @@
+%% Jargon's upstream Makefile assumes a Unix shell, including on Windows.
+Build = filename:absname("tools/build_jargon.escript"),
+Artifact = case os:type() of {win32, _} -> "priv/jargon.dll"; _ -> "priv/jargon.so" end,
+Overrides = [{override, jargon, [
+    {pre_hooks, [{compile, "escript \"" ++ Build ++ "\""}]},
+    {post_hooks, []},
+    {artifacts, [Artifact]}
+]}],
+CONFIG ++ [{overrides, Overrides}].

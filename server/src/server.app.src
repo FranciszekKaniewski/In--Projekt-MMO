@@ -1,11 +1,17 @@
 {application, server, [
-    {description, "SDL game TCP server"},
+    {description, "SDL game TLS server with account authentication"},
     {vsn, "0.1.0"},
-    {registered, [server_sup, server_connection_sup, server_listener]},
+    {registered, [server_sup, server_db, server_auth_guard,
+                  server_connection_sup, server_listener]},
     {mod, {server_app, []}},
     {applications, [
         kernel,
-        stdlib
+        stdlib,
+        crypto,
+        public_key,
+        ssl,
+        epgsql,
+        jargon
     ]},
     {env, [{ip, {127, 0, 0, 1}}, {port, 4000}]},
     {modules, []},

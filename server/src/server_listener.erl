@@ -16,13 +16,16 @@ init([]) ->
     Options = [binary, {ip, IP}, {packet, 4}, {packet_size, 4096},
                {active, false}, {reuseaddr, true}, {nodelay, true},
                {send_timeout, 5000}, {send_timeout_close, true}],
-    case gen_tcp:listen(Port, Options) of
+    TLS = [{certfile, application:get_env(server, tls_certfile, "priv/tls/server.crt")},
+           {keyfile, application:get_env(server, tls_keyfile, "priv/tls/server.key")},
+           {versions, ['tlsv1.2', 'tlsv1.3']}, {verify, verify_none}],
+    case ssl:listen(Port, Options ++ TLS) of
         {ok, ListenSocket} ->
-            {ok, ActualPort} = inet:port(ListenSocket),
-            %% accept/1 blocks in this linked process, never in a callback.
+            {ok, {_, ActualPort}} = ssl:sockname(ListenSocket),
+            %% Accept transport here; each connection performs its own handshake.
             %% If the acceptor crashes, its listener is restarted by OTP.
             spawn_link(fun() -> accept_loop(ListenSocket) end),
-            logger:notice("Game server listening on ~s:~B",
+            logger:notice("Game TLS server listening on ~s:~B",
                           [inet:ntoa(IP), ActualPort]),
             {ok, #{socket => ListenSocket, port => ActualPort}};
         {error, Reason} ->
@@ -41,10 +44,10 @@ handle_info(_Message, State) ->
     {noreply, State}.
 
 terminate(_Reason, State) ->
-    gen_tcp:close(maps:get(socket, State)).
+    ssl:close(maps:get(socket, State)).
 
 accept_loop(ListenSocket) ->
-    case gen_tcp:accept(ListenSocket) of
+    case ssl:transport_accept(ListenSocket) of
         {ok, Socket} ->
             start_connection(Socket),
             accept_loop(ListenSocket);
@@ -55,17 +58,24 @@ accept_loop(ListenSocket) ->
     end.
 
 start_connection(Socket) ->
+    Count = proplists:get_value(active, supervisor:count_children(server_connection_sup)),
+    case Count < application:get_env(server, max_connections, 256) of
+        true -> start_worker(Socket);
+        false -> ssl:close(Socket)
+    end.
+
+start_worker(Socket) ->
     case server_connection_sup:start_connection(Socket) of
         {ok, Pid} ->
             %% Keep the socket passive until its new owner is ready.
-            case gen_tcp:controlling_process(Socket, Pid) of
+            case ssl:controlling_process(Socket, Pid) of
                 ok ->
                     server_connection:activate(Pid);
                 {error, _Reason} ->
-                    gen_tcp:close(Socket),
+                    ssl:close(Socket),
                     gen_server:stop(Pid)
             end;
         {error, Reason} ->
-            gen_tcp:close(Socket),
+            ssl:close(Socket),
             logger:warning("Cannot start client connection: ~p", [Reason])
     end.
