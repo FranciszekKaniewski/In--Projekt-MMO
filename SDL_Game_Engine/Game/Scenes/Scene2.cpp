@@ -1,6 +1,8 @@
 #include "../../Engine/Scenes/GameScene.h"
 #include "../../Engine/ECS/Components/KeyboardControlComponent.h"
 #include "../../Engine/ECS/Components/MovementBoundsComponent.h"
+#include "../../Engine/ECS/Components/MovementComponent.h"
+#include "../../Engine/ECS/Components/ChatSpeakerComponent.h"
 #include "../../Engine/Scenes/SceneManager.h"
 #include "../../Engine/World/Map.h"
 #include "../Entities/Player.h"
@@ -28,11 +30,17 @@ public:
 
         world.clear();
 
-        const auto spawn = map.isLoaded()
+        auto spawn = map.isLoaded()
             ? map.position + math::Vector2{1350.0f, 1320.0f} * map.scale
             : math::Vector2{width * 0.5f, centerY};
+        const auto saved = app.serverClient ? app.serverClient->selectedCharacter() : std::nullopt;
+        if(saved && saved->mapKey == "map_expanded") spawn = {saved->x, saved->y};
         const auto player = spawnPlayer(world, spawn);
         if (!player) return;
+        if(saved) {
+            world.getComponent<ChatSpeakerComponent>(player).name = saved->name;
+            world.getComponent<MovementComponent>(player).facing = static_cast<FacingDirection>(saved->facing);
+        }
         world.addComponent<KeyboardControlComponent>(player);
         if (map.isLoaded()) {
             auto& bounds = world.addComponent<MovementBoundsComponent>(player);
@@ -52,6 +60,18 @@ public:
         enableChat(player);
     }
 
+    void update(App& app) override {
+        GameScene::update(app);
+        if(!app.serverClient) return;
+        while(auto reply = app.serverClient->poll()) {
+            if(reply->type == ServerReply::Type::Error && !app.serverClient->isAuthenticated()) {
+                app.loginMessage = serverErrorText(reply->error);
+                App::sceneManager->changeScene(createScene1, app);
+                return;
+            }
+        }
+    }
+
 protected:
     void renderWorld(App& app) override {
         map.draw(app.renderer, camera());
@@ -60,7 +80,8 @@ protected:
     void handleWorldEvents(App& app, SDL_Event &event) override {
         if (event.type == SDL_KEYDOWN) {
             if (event.key.keysym.sym == SDLK_ESCAPE) {
-                app.sceneManager->changeScene(createScene1, app);
+                app.sceneManager->changeScene(
+                    app.serverClient && app.serverClient->isAuthenticated() ? createCharactersScene : createScene1, app);
             }
         }
     }

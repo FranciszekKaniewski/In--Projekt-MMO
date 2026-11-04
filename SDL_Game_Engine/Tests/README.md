@@ -8,11 +8,11 @@ Raportowanie realizuje listener Catch2 w support/Report.cpp; Makefile nie parsuj
 | Katalog | Zestawy | Zakres |
 |---|---|---|
 | unit | Vector2, Velocity, Utf8 | Matematyka, prędkości i limity znaków Unicode, bez SDL i plików |
-| integration | Camera, Chat, Collider, SpriteAnimation, Player, DisplayScaling, Map, MemoryLeaks | Renderer programowy SDL, czat, dymki i fokus, kamera i culling, mapy, skalowanie rozdzielczości, sprite'y, animacje, ruch gracza i sterowanie, ECS, sceny, UI, audio i własność zasobów |
+| integration | Camera, Chat, Collider, SpriteAnimation, Player, DisplayScaling, Map, MemoryLeaks, Login | Renderer SDL, czat, kamera, mapy, ruch, ECS, sceny, UI, audio, własność zasobów, logowanie i wybór postaci |
 | e2e | FrameTiming | Rzeczywista pętla z main.cpp, testowa scena, limity FPS, logika i SDL_QUIT |
 | support | Report.cpp, Measurements.h | Wspólny runner, JSON i bufory pomiarów |
 
-Obecnie jest **58 przypadków Catch2**: 15 unit, 42 integration i 1 e2e.
+Obecnie są **63 przypadki Catch2**: 15 unit, 47 integration i 1 e2e.
 Asercje są liczone osobno. Scenariusz pamięci obejmujący 300 przejść scen jest jednym przypadkiem.
 
 Wszystkie biblioteki są w katalogu projektu: Vendor/SDL2, Vendor/nlohmann, Vendor/Catch2.
@@ -29,6 +29,18 @@ Na końcu drukuje liczbę zaliczonych, niezaliczonych i pominiętych przypadków
 Niezerowy kod oznacza błąd testu, kompilacji, raportowania albo niekompletny przebieg.
 
 **make test-unit**, **make test-integration** i **make test-e2e** uruchamiają wybraną kategorię.
+`make test-integration FILTER="[login],[characters]"` sprawdza logowanie,
+błędy, ponowną próbę, listę stron, pustą listę, wybór i wygaśnięcie sesji.
+Sceny korzystają z kontrolowanego klienta testowego; podglądy UI zapisują się
+w `build/tests/integration/Login-ui.png`, `Characters-ui.png` i `Characters-list-ui.png`.
+
+**make test-network** wymaga dodatkowo Pythona 3.10+ i uruchamia 11 scenariuszy
+natywnego klienta C++ przeciw lokalnym serwerom TLS: TLS 1.2/1.3, fragmentację
+ramek, sesję wspólną dla logowania/listy/wyboru, Unicode i duże ID, błędne hasło,
+niewłaściwy host/CA, brak CA, zbyt dużą ramkę, wygaśnięcie, timeout i anulowanie.
+Odczyt certyfikatu jest sprawdzany również w ścieżce z polskimi znakami i emoji.
+Testy używają certyfikatów z `../server/test/fixtures` i nie wymagają bazy.
+
 Zachowane skróty: make test-vector2, make test-velocity, make test-collider,
 make test-sprite, make test-animation, make test-player, make test-chat, make test-resolution, make test-map, make test-camera,
 make test-memory i make test-frame-timing.

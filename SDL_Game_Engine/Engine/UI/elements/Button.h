@@ -11,6 +11,7 @@
 class Button : public Label {
 private:
     bool isHovered = false;
+    bool enabled = true;
 
 public:
     float hoverScale;
@@ -29,15 +30,18 @@ public:
     }
 
     void setHover(bool hover) override {
-        isHovered = hover;
+        isHovered = enabled && hover;
     }
 
+    void setEnabled(bool value) { enabled = value; if(!enabled) isHovered = false; }
+    bool isEnabled() const { return enabled; }
+
     bool isInteractive() const override {
-        return true;
+        return enabled;
     }
 
     void handleClick() override {
-        if (!isHovered || !onClick) return;
+        if (!enabled || !isHovered || !onClick) return;
 
         onClick();
     }
@@ -52,12 +56,13 @@ public:
         drawRect.x -= (drawRect.w - rect.w) / 2;
         drawRect.y -= (drawRect.h - rect.h) / 2;
 
-        const Uint8 backgroundMod = isHovered ? 128 : 255;
+        const Uint8 backgroundMod = !enabled ? 100 : isHovered ? 128 : 255;
         drawBackground(drawRect, backgroundMod);
 
         if (!texture) return;
 
-        SDL_SetTextureColorMod(texture, 255, 255, 255);
+        const Uint8 textMod = enabled ? 255 : 140;
+        SDL_SetTextureColorMod(texture, textMod, textMod, textMod);
 
         const int padding = static_cast<int>(std::lround(std::max(0, margin) * scale));
         SDL_Rect textBounds = {drawRect.x + padding / 2, drawRect.y + padding / 2,
