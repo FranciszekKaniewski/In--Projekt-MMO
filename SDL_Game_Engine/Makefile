@@ -1,4 +1,4 @@
-.PHONY: build run bar all clean test test-unit test-integration test-e2e test-vector2 test-velocity test-collider test-sprite test-animation test-player test-chat test-resolution test-map test-camera test-memory test-frame-timing
+.PHONY: build run bar all clean test test-unit test-integration test-e2e test-network test-vector2 test-velocity test-collider test-sprite test-animation test-player test-chat test-resolution test-map test-camera test-memory test-frame-timing
 .NOTPARALLEL:
 
 CXX := g++
@@ -7,7 +7,8 @@ ENGINE := $(wildcard Engine/*.cpp Engine/*/*.cpp)
 GAME := $(wildcard Game/*/*.cpp)
 HEADERS := $(wildcard Engine/*/*.h Engine/*/*/*.h Engine/*/*/*/*.h Game/*/*.h Tests/support/*.h Vendor/nlohmann/*.hpp Vendor/SDL2/include/SDL2/*.h)
 SDL_LIBS := -L Vendor/SDL2/lib -lmingw32 -lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf \
-	-lsetupapi -lversion -limm32 -lole32 -loleaut32 -lwinmm -lgdi32 -luser32 -lshell32 -ladvapi32 -lRpcrt4
+	-lsetupapi -lversion -limm32 -lole32 -loleaut32 -lwinmm -lgdi32 -luser32 -lshell32 -ladvapi32 -lRpcrt4 \
+	-lws2_32 -lsecur32 -lcrypt32
 TEST_COMMON := build/tests/catch.o build/tests/report.o
 MEMORY_HOOKS := -Wl,--wrap=SDL_Init,--wrap=SDL_CreateWindow,--wrap=SDL_CreateRenderer \
 	-Wl,--wrap=TTF_Init,--wrap=IMG_Init,--wrap=Mix_Init,--wrap=Mix_OpenAudio
@@ -18,6 +19,7 @@ build:
 	@xcopy /E /I /H /Y "Game\Assets" "build\Assets" >nul
 	@if not exist "build\Config" mkdir "build\Config"
 	@if not exist "build\Config\settings.json" copy /Y "Game\Config\settings.json" "build\Config\settings.json" >nul
+	@if exist "..\server\priv\tls\ca.crt" copy /Y "..\server\priv\tls\ca.crt" "build\Config\server-ca.crt" >nul
 	$(CXX) $(CXXFLAGS) -o build/SDL_Game_Engine.exe main.cpp $(ENGINE) $(GAME) -lmingw32 -L Vendor/SDL2/lib -lSDL2main $(SDL_LIBS)
 
 run:
@@ -66,6 +68,13 @@ test-e2e: build/tests/e2e/tests.exe
 	@xcopy /E /I /H /Y "Game\Assets" "build\tests\e2e\Assets" >nul
 	@xcopy /E /I /H /Y "Game\Config" "build\tests\e2e\Config" >nul
 	cd build\tests\e2e && tests.exe $(FILTER) --colour-mode none
+
+build/tests/network/client.exe: Tests/network/Client.cpp Engine/Network/GameClient.cpp Engine/Network/TlsConnection.cpp $(HEADERS)
+	@if not exist "build\tests\network" mkdir "build\tests\network"
+	$(CXX) $(CXXFLAGS) -Wall -Wextra -Wpedantic -municode -o $@ Tests/network/Client.cpp Engine/Network/GameClient.cpp Engine/Network/TlsConnection.cpp -lws2_32 -lsecur32 -lcrypt32
+
+test-network: build/tests/network/client.exe
+	python Tests/network/run.py
 
 test-vector2: FILTER := [vector2]
 test-velocity: FILTER := [velocity]

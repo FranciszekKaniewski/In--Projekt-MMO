@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <nlohmann/json.hpp>
+#include "../Network/GameClient.h"
 
 struct WindowConfig {
     std::string title;
@@ -24,6 +25,7 @@ struct AppConfig {
     WindowConfig window;
     GameConfig game;
     AudioConfig audio;
+    ServerConfig server;
 };
 
 inline AppConfig loadConfig(const std::filesystem::path& path) {
@@ -44,6 +46,17 @@ inline AppConfig loadConfig(const std::filesystem::path& path) {
         cfg.audio.volume = j["audio"].value("volume", 100);
         cfg.audio.muted = j["audio"].value("muted", false);
     }
+    if (j.contains("server")) {
+        const auto& server = j.at("server");
+        cfg.server.host = server.value("host", "localhost");
+        const int port = server.value("port", 4000);
+        cfg.server.caFile = server.value("caFile", "server-ca.crt");
+        cfg.server.timeoutMs = server.value("timeoutMs", 5000);
+        if(cfg.server.host.empty() || cfg.server.host.size() > 253 || port < 1 || port > 65535 ||
+           cfg.server.caFile.empty() || cfg.server.timeoutMs < 1 || cfg.server.timeoutMs > 30000)
+            throw std::runtime_error("Niepoprawna konfiguracja serwera");
+        cfg.server.port = static_cast<std::uint16_t>(port);
+    }
     return cfg;
 }
 
@@ -56,7 +69,9 @@ inline void saveConfig(const std::filesystem::path& path, const AppConfig& cfg) 
             {"fullscreen", cfg.window.fullscreen}
         }},
         {"game", {{"fps", cfg.game.fps}, {"devMode", cfg.game.devMode}}},
-        {"audio", {{"volume", cfg.audio.volume}, {"muted", cfg.audio.muted}}}
+        {"audio", {{"volume", cfg.audio.volume}, {"muted", cfg.audio.muted}}},
+        {"server", {{"host", cfg.server.host}, {"port", cfg.server.port},
+                    {"caFile", cfg.server.caFile}, {"timeoutMs", cfg.server.timeoutMs}}}
     };
 
     std::filesystem::path temporaryPath = path;

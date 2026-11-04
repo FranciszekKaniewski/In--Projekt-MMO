@@ -4,6 +4,7 @@
 #include <vector>
 #include <SDL.h>
 #include "../Audio/AudioManager.h"
+#include "../Network/GameClient.h"
 
 class SceneManager;
 class Label;
@@ -44,6 +45,11 @@ public:
     bool devMode = false;
     GameSettings settings;
     AudioManager audio;
+    ServerConfig serverSettings;
+    std::unique_ptr<GameClient> serverClient;
+    std::string loginMessage;
+
+    GameClient& gameClient();
 
     SDL_Window *window = nullptr;
     static SDL_Renderer *renderer;
