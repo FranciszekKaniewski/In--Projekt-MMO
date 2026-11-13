@@ -49,6 +49,7 @@ private:
     math::Vector2 correction;
     FacingDirection predictedFacing = FacingDirection::South;
     bool sentMovement = false;
+    RequestId pendingLeave = 0;
 
     math::Vector2 clampToMap(math::Vector2 position) const {
         const auto size = map.worldSize();
@@ -183,6 +184,11 @@ protected:
     void updateWorld(App& app) override {
         if(!saved.id || !app.serverClient || !player) return;
         while(auto reply = app.serverClient->poll()) {
+            if(pendingLeave && reply->request == pendingLeave &&
+               reply->type == ServerReply::Type::WorldLeft) {
+                App::sceneManager->changeScene(createCharactersScene, app);
+                return;
+            }
             if(reply->type == ServerReply::Type::Error) {
                 if(!app.serverClient->isAuthenticated()) {
                     app.loginMessage = serverErrorText(reply->error);
@@ -193,6 +199,10 @@ protected:
                     App::sceneManager->changeScene(createCharactersScene, app);
                     return;
                 }
+                if(pendingLeave && reply->request == pendingLeave) {
+                    pendingLeave = 0;
+                    receiveServerMessage(serverErrorText(reply->error));
+                }
             }
         }
         while(auto snapshot = app.serverClient->pollWorld()) applySnapshot(*snapshot);
@@ -202,7 +212,7 @@ protected:
         const auto direction = world.getComponent<MovementInputComponent>(player).direction;
         const bool wantsToMove = direction.lengthSquared() > 0;
         const auto before = predicted;
-        if(elapsed > 0 && (wantsToMove || sentMovement) &&
+        if(!pendingLeave && elapsed > 0 && (wantsToMove || sentMovement) &&
            pendingInputs.size() < maxPendingInputs &&
            app.serverClient->moveInput(nextSequence, static_cast<int>(direction.x), static_cast<int>(direction.y))) {
             pendingInputs.push_back({nextSequence++, direction});
@@ -223,9 +233,12 @@ protected:
     void handleWorldEvents(App& app, SDL_Event &event) override {
         if (event.type == SDL_KEYDOWN) {
             if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
-                if(saved.id && app.serverClient && app.serverClient->isAuthenticated()) app.serverClient->leaveWorld();
-                app.sceneManager->changeScene(
-                    app.serverClient && app.serverClient->isAuthenticated() ? createCharactersScene : createScene1, app);
+                const bool authenticated = app.serverClient && app.serverClient->isAuthenticated();
+                if(saved.id && authenticated) {
+                    if(!pendingLeave) pendingLeave = app.serverClient->leaveWorld();
+                    return;
+                }
+                app.sceneManager->changeScene(authenticated ? createCharactersScene : createScene1, app);
             }
         }
     }

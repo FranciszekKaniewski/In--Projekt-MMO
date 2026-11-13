@@ -125,9 +125,13 @@ Przy braku następnego stanu może wykorzystać `vx` i `vy` przez maksymalnie
 jeden krok świata. Obie prędkości podano w jednostkach na sekundę.
 
 Odrzucone wejście w aktywnej sesji daje zdarzenie `move_error` z polem
-`code`. Wyjście, wylogowanie, wygaśnięcie sesji i zamknięcie
-połączenia usuwają postać ze świata. Ruch jest przechowywany w pamięci,
-więc po ponownym wyborze postać startuje z pozycji zapisanej w PostgreSQL.
+`code`. Przy wyjściu, wylogowaniu, wygaśnięciu sesji lub zamknięciu
+połączenia serwer zapisuje ostatnią pozycję z symulacji do `position_x`
+i `position_y` w PostgreSQL. `world_left` i `logout_ok` są wysyłane
+po udanym zapisie. Jeśli zapis się nie powiedzie, klient może ponowić
+żądanie. Po zerwaniu połączenia lub wygaśnięciu sesji serwer ponawia
+zapis przy chwilowej niedostępności bazy. Przy następnym wejściu do
+świata serwer odczytuje zapisaną pozycję.
 
 ## Błędy
 
@@ -154,6 +158,7 @@ więc po ponownym wyborze postać startuje z pozycji zapisanej w PostgreSQL.
 | `already_in_world` | Połączenie jest już w świecie gry |
 | `character_in_world` | Wybrana postać jest aktywna w innym połączeniu |
 | `world_full` | Mapa osiągnęła limit aktywnych postaci |
+| `position_save_failed` | Zapis pozycji się nie powiódł. Można ponowić wyjście lub wylogowanie |
 | `session_expired` | Sesja wygasła; konto i wybór postaci zostały usunięte z sesji |
 | `rate_limited` | Przekroczony limit prób; zaczekaj na koniec okna limitu |
 | `server_busy` | Brak wolnego miejsca na operację uwierzytelnienia; spróbuj później |

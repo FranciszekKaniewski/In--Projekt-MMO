@@ -87,8 +87,8 @@ dispatch(<<"get_map">>, _, #{character := #{map_key := MapKey}} = State) ->
         {error, Code} -> {error_message(Code), State}
     end;
 dispatch(<<"get_map">>, _, State) -> {error_message(character_required), State};
-dispatch(<<"enter_world">>, _, #{character := Character, map_bounds := Bounds} = State) ->
-    case server_world:enter(Character, Bounds) of
+dispatch(<<"enter_world">>, _, #{user := #{id := UserId}, character := Character, map_bounds := Bounds} = State) ->
+    case server_world:enter(UserId, Character, Bounds) of
         {ok, Ref, Spawn} ->
             {#{type => <<"world_joined">>, character => Spawn}, State#{world_ref => Ref}};
         {error, Code} -> {error_message(Code), State}
@@ -110,23 +110,33 @@ dispatch(<<"move_input">>, Message, #{world_ref := _} = State) ->
     end;
 dispatch(<<"move_input">>, _, State) -> {move_error(world_required), State};
 dispatch(<<"leave_world">>, _, State) ->
-    {#{type => <<"world_left">>}, leave_world(State)};
+    case leave_world(State) of
+        {ok, Left} -> {#{type => <<"world_left">>}, Left};
+        {error, Code} -> {error_message(Code), State}
+    end;
 dispatch(<<"logout">>, _, State) ->
-    {#{<<"type">> => <<"logout_ok">>}, clear_session(State)};
+    case leave_world(State) of
+        {ok, Left} -> {#{<<"type">> => <<"logout_ok">>}, clear_session(Left)};
+        {error, Code} -> {error_message(Code), State}
+    end;
 dispatch(_, _, State) -> {error_message(unknown_message_type), State}.
 
 valid_id(Value, Minimum) ->
     is_integer(Value) andalso Value >= Minimum andalso Value =< 9223372036854775807.
 
+clear_session(#{world_ref := _} = State) ->
+    server_world:detach(),
+    clear_session(maps:remove(world_ref, State));
 clear_session(State) ->
-    Left = leave_world(State),
     maps:without([character, map_bounds],
-                 Left#{user => undefined, character_id => undefined, session_deadline => undefined}).
+                 State#{user => undefined, character_id => undefined, session_deadline => undefined}).
 
 leave_world(#{world_ref := _} = State) ->
-    ok = server_world:leave(),
-    maps:remove(world_ref, State);
-leave_world(State) -> State.
+    case server_world:leave() of
+        ok -> {ok, maps:remove(world_ref, State)};
+        {error, _} = Error -> Error
+    end;
+leave_world(State) -> {ok, State}.
 
 decode(Data) ->
     try json:decode(Data) of Message -> {ok, Message}

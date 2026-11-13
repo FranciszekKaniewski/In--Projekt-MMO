@@ -270,6 +270,19 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     SDL_Event escape{}; escape.type = SDL_KEYDOWN; escape.key.keysym.sym = SDLK_ESCAPE;
     App::sceneManager->handleEvents(canvas.app, escape);
     REQUIRE(canvas.client->worldLeaves == 1);
+    setRight(true);
+    REQUIRE(canvas.client->movementInputs.size() == 3);
+    REQUIRE(App::sceneManager->activeScene == game);
+    App::sceneManager->handleEvents(canvas.app, escape);
+    REQUIRE(canvas.client->worldLeaves == 1);
+    canvas.client->error("position_save_failed");
+    canvas.update();
+    REQUIRE(App::sceneManager->activeScene == game);
+    REQUIRE(game->chatSession().messages().back().text == serverErrorText("position_save_failed"));
+    App::sceneManager->handleEvents(canvas.app, escape);
+    REQUIRE(canvas.client->worldLeaves == 2);
+    canvas.client->success(ServerReply::Type::WorldLeft);
+    canvas.update();
     REQUIRE(canvas.client->isAuthenticated());
     REQUIRE_FALSE(dynamic_cast<GameScene*>(App::sceneManager->activeScene));
 }

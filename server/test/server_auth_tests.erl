@@ -124,7 +124,7 @@ world_movement(Port) ->
         check_map_download(A),
         ?assertMatch(#{<<"type">> := <<"world_joined">>,
                        <<"character">> := #{<<"position_x">> := 1350.0}}, request(A, <<"enter_world">>)),
-        server_test_support:with_client(Port, fun(B) ->
+        {DisconnectedId, DisconnectedPosition} = server_test_support:with_client(Port, fun(B) ->
             BId = world_character(B, unique(<<"world">>)),
             check_map_download(B),
             ?assertMatch(#{<<"type">> := <<"world_joined">>}, request(B, <<"enter_world">>)),
@@ -159,13 +159,61 @@ world_movement(Port) ->
             Stop1 = await_world(B, Stopped, 20),
             Stop2 = await_world(B, Stopped, 20),
             ?assertEqual(maps:get(AId, Stop1), maps:get(AId, Stop2)),
-            ?assertMatch(#{<<"type">> := <<"world_left">>}, world_request(B, #{type => <<"leave_world">>})),
-            _ = await_world(A, fun(Players) -> not maps:is_key(BId, Players) end, 20),
-            ?assertMatch(#{<<"type">> := <<"world_joined">>}, request(B, <<"enter_world">>)),
-            _ = await_world(A, Pred, 20)
+            LeftPosition = move_diagonally(B, BId),
+            ?assert(positions_match({1350.0 + 160 / 60 / math:sqrt(2),
+                                     1320.0 + 160 / 60 / math:sqrt(2)}, LeftPosition)),
+            Leave = #{type => <<"leave_world">>},
+            {ok, Lock} = epgsql:connect(application:get_env(server, db_options, #{})),
+            try
+                {ok, [], []} = epgsql:squery(Lock, "BEGIN"),
+                {ok, _, [{BId}]} = epgsql:equery(Lock,
+                    "SELECT id FROM public.characters WHERE id = $1 FOR UPDATE", [BId]),
+                ?assertEqual(error_reply(position_save_failed), world_request(B, Leave)),
+                ?assertEqual({1350.0, 1320.0}, stored_position(BId))
+            after
+                epgsql:close(Lock)
+            end,
+            ?assertMatch(#{<<"type">> := <<"world_left">>}, world_request(B, Leave)),
+            ?assert(positions_match(LeftPosition, stored_position(BId))),
+            _ = await_world(A, fun(Players) -> not maps:is_key(BId, Players) end, 100),
+            #{<<"type">> := <<"world_joined">>, <<"character">> := Spawn} = request(B, <<"enter_world">>),
+            ?assert(positions_match(LeftPosition, world_position(Spawn))),
+            _ = await_world(A, Pred, 20),
+            {BId, move_diagonally(B, BId)}
         end),
-        _ = await_world(A, fun(Players) -> map_size(Players) =:= 1 end, 20)
+        _ = await_world(A, fun(Players) -> map_size(Players) =:= 1 end, 20),
+        await_saved_position(DisconnectedId, DisconnectedPosition, 50),
+        ?assertMatch(#{<<"type">> := <<"logout_ok">>}, world_request(A, #{type => <<"logout">>})),
+        ?assert(positions_match({1350 + 4 * 160 / 60, 1320.0}, stored_position(AId)))
     end).
+
+move_diagonally(Socket, Id) ->
+    ok = ssl:send(Socket, json:encode(#{type => <<"move_input">>, seq => 1, dx => 1, dy => 1})),
+    Players = await_world(Socket, fun(Rows) ->
+        maps:get(<<"input_ack">>, maps:get(Id, Rows)) =:= 1
+    end, 20),
+    world_position(maps:get(Id, Players)).
+
+world_position(#{<<"position_x">> := X, <<"position_y">> := Y}) -> {X, Y}.
+
+stored_position(Id) ->
+    {ok, _, [Position]} = server_db:query(
+        "SELECT position_x, position_y FROM public.characters WHERE id = $1", [Id]),
+    Position.
+
+%% PostgreSQL stores the coordinates as single-precision floats.
+positions_match({X, Y}, {SavedX, SavedY}) ->
+    abs(X - SavedX) < 0.0001 andalso abs(Y - SavedY) < 0.0001.
+
+await_saved_position(Id, Expected, 0) ->
+    ?assert(positions_match(Expected, stored_position(Id)));
+await_saved_position(Id, Expected, Attempts) ->
+    case positions_match(Expected, stored_position(Id)) of
+        true -> ok;
+        false ->
+            timer:sleep(20),
+            await_saved_position(Id, Expected, Attempts - 1)
+    end.
 
 world_character(Socket, Name) ->
     register_user(Socket, Name),

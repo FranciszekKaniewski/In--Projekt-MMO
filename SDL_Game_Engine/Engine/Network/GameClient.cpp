@@ -416,6 +416,7 @@ std::string serverErrorText(const std::string& code) {
     if(code == "world_full") return u8"Na tej mapie nie ma wolnych miejsc.";
     if(code == "character_in_world" || code == "already_in_world") return u8"Postać jest już w świecie gry.";
     if(code == "world_required") return u8"Postać nie znajduje się w świecie gry.";
+    if(code == "position_save_failed") return u8"Nie udało się zapisać pozycji postaci. Spróbuj ponownie wyjść.";
     if(code == "invalid_response") return u8"Serwer zwrócił niepoprawną odpowiedź.";
     return u8"Operacja nie powiodła się. Spróbuj ponownie.";
 }

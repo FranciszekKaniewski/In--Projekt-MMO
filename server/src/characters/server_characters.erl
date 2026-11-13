@@ -1,5 +1,5 @@
 -module(server_characters).
--export([list/2, find_owned/2]).
+-export([list/2, find_owned/2, save_position/2]).
 
 list(UserId, AfterId) ->
     %% Bounded response fits the protocol's 4096-byte frame limit.
@@ -22,4 +22,14 @@ find_owned(UserId, CharacterId) ->
                    facing => Facing, level => Level, experience => XP}};
         {ok, _, []} -> {error, character_not_found};
         _ -> {error, service_unavailable}
+    end.
+
+save_position(UserId, #{id := Id, map_key := Map, position_x := X, position_y := Y}) ->
+    case server_db:query(
+        "UPDATE public.characters SET position_x = $1, position_y = $2 "
+        "WHERE id = $3 AND user_id = $4 AND map_key = $5",
+        [X, Y, Id, UserId, Map]) of
+        {ok, 1} -> ok;
+        {ok, 0} -> {error, character_not_found};
+        _ -> {error, position_save_failed}
     end.
