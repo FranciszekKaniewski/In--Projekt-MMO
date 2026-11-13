@@ -44,7 +44,7 @@ dispatch(Type, _, State) when Type =:= <<"register">>; Type =:= <<"login">> ->
     {error_message(already_authenticated), State};
 dispatch(Type, _, #{user := undefined} = State)
   when Type =:= <<"list_characters">>; Type =:= <<"select_character">>;
-       Type =:= <<"logout">> ->
+       Type =:= <<"get_map">>; Type =:= <<"logout">> ->
     {error_message(authentication_required), State};
 dispatch(<<"list_characters">>, Message, #{user := #{id := UserId}} = State) ->
     After = maps:get(<<"after_id">>, Message, 0),
@@ -63,13 +63,22 @@ dispatch(<<"select_character">>, Message, #{user := #{id := UserId}} = State) ->
     case valid_id(Id, 1) of
         true ->
             case server_characters:find_owned(UserId, Id) of
-                {ok, Character} ->
+                {ok, #{map_key := MapKey} = Character} ->
                     {#{<<"type">> => <<"character_selected">>, <<"character">> => Character},
-                     State#{character_id => Id}};
+                     State#{character_id => Id, map_key => MapKey}};
                 {error, Code} -> {error_message(Code), State}
             end;
         false -> {error_message(invalid_message), State}
     end;
+dispatch(<<"get_map">>, _, #{map_key := MapKey} = State) ->
+    case server_maps:read(MapKey) of
+        {ok, Bytes} ->
+            Header = #{<<"type">> => <<"map_data">>, <<"map_key">> => MapKey,
+                       <<"size">> => byte_size(Bytes)},
+            {{map_data, Header, Bytes}, State};
+        {error, Code} -> {error_message(Code), State}
+    end;
+dispatch(<<"get_map">>, _, State) -> {error_message(character_required), State};
 dispatch(<<"logout">>, _, State) ->
     {#{<<"type">> => <<"logout_ok">>}, clear_session(State)};
 dispatch(_, _, State) -> {error_message(unknown_message_type), State}.
@@ -78,7 +87,7 @@ valid_id(Value, Minimum) ->
     is_integer(Value) andalso Value >= Minimum andalso Value =< 9223372036854775807.
 
 clear_session(State) ->
-    State#{user => undefined, character_id => undefined, session_deadline => undefined}.
+    maps:remove(map_key, State#{user => undefined, character_id => undefined, session_deadline => undefined}).
 
 decode(Data) ->
     try json:decode(Data) of Message -> {ok, Message}

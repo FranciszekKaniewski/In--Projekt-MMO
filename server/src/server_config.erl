@@ -14,6 +14,7 @@ load() ->
     }),
     set_default(tls_certfile, env("GAME_TLS_CERTFILE", "priv/tls/server.crt", Dotenv)),
     set_default(tls_keyfile, env("GAME_TLS_KEYFILE", "priv/tls/server.key", Dotenv)),
+    set_default(maps_dir, env("GAME_MAP_DIR", "../SDL_Game_Engine/Game/Assets/Maps", Dotenv)),
     ok.
 
 set_default(Key, Value) ->

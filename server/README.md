@@ -1,7 +1,7 @@
-# Serwer gry — konta i sesje
+# Serwer gry
 
-Serwer obsługuje ping, rejestrację, logowanie, listę i wybór własnych postaci
-oraz wylogowanie. Używa TLS, PostgreSQL i sesji przypisanej do połączenia.
+Serwer obsługuje ping, rejestrację, logowanie, listę i wybór własnych postaci,
+pobieranie map oraz wylogowanie. Używa TLS, PostgreSQL i sesji przypisanej do połączenia.
 Wymaga Erlang/OTP 27+, `rebar3` i kompilatora C dla biblioteki Argon2id.
 Na Windowsie kompilacja używa GCC z MSYS2 (`C:/msys64/mingw64/bin/gcc.exe`)
 lub kompilatora wskazanego zmienną `CC` (ścieżka do programu, bez argumentów).
@@ -41,6 +41,12 @@ Oczekiwany wynik: `{"type": "pong"}`. Opcje `--host` i `--port` pozwalają zmien
 adres. `server_listener:port().` w powłoce Erlanga pokazuje rzeczywisty port.
 Port `0` w konfiguracji oznacza, że system wybierze wolny port; używają go testy.
 `--cafile` wskazuje zaufany certyfikat CA, domyślnie `priv/tls/ca.crt`.
+
+Po kliknięciu `Play` klient wybiera postać i pobiera przypisany jej plik TMJ
+przez TLS. Klucze `map_expanded` i `map_example2` wskazują odpowiednio na
+`Map_expanded.tmj` i `Map_example2.tmj`. Domyślnie serwer czyta je z
+`../SDL_Game_Engine/Game/Assets/Maps`. Przy osobnym wdrożeniu skopiuj pliki TMJ
+do katalogu wskazanego przez `GAME_MAP_DIR`. Atlas graficzny należy do zasobów klienta.
 
 ## Logowanie i autoryzacja
 
@@ -120,6 +126,7 @@ uruchomienie, nadzór i konfigurację. Moduły zachowują prefiks `server_`.
 | `auth/` | Rejestracja, logowanie, hasła, limity prób i zapytania do tabeli kont |
 | `characters/` | Lista postaci i odczyt postaci należącej do zalogowanego konta |
 | `db/` | Utrzymywanie połączenia z PostgreSQL i wykonywanie zapytań |
+| `world/` | Udostępnianie plików TMJ według klucza mapy |
 
 `server_protocol` przekazuje operacje do `server_auth` lub `server_characters`.
 Moduły `server_accounts` i `server_characters` wykonują zapytania przez `server_db`.

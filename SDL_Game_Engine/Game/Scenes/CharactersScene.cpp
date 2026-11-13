@@ -1,5 +1,6 @@
 #include "../../Engine/Scenes/UIScene.h"
 #include "../../Engine/Scenes/SceneManager.h"
+#include "../../Engine/World/Map.h"
 #include <algorithm>
 
 class CharactersScene : public UIScene {
@@ -10,7 +11,9 @@ class CharactersScene : public UIScene {
     std::size_t page = 0, requestedPage = 0;
     std::int64_t requestedCursor = 0;
     RequestId pending = 0;
-    bool selecting = false, hasMore = false, enteringGame = false, loaded = false;
+    enum class Operation { List, Select, Download };
+    Operation operation = Operation::List;
+    bool hasMore = false, enteringGame = false, loaded = false;
     Label* status = nullptr;
     Button* play = nullptr;
     Button* previous = nullptr;
@@ -33,7 +36,7 @@ class CharactersScene : public UIScene {
 
     void loadPage(App& app, std::size_t target, std::int64_t cursor) {
         if(pending) return;
-        requestedPage = target; requestedCursor = cursor; selecting = false;
+        requestedPage = target; requestedCursor = cursor; operation = Operation::List;
         pending = app.gameClient().listCharacters(cursor);
         setMessage(u8"Pobieranie listy postaci...");
         updateControls();
@@ -53,7 +56,7 @@ class CharactersScene : public UIScene {
     void enter(App& app) {
         if(pending || !selectedId) return;
         app.audio.playSound("button.click");
-        selecting = true;
+        operation = Operation::Select;
         pending = app.gameClient().selectCharacter(selectedId);
         setMessage(u8"Wybieranie postaci na serwerze...");
         updateControls();
@@ -139,17 +142,29 @@ public:
             }
             if(!pending) continue;
             pending = 0;
-            if(selecting && reply->type == ServerReply::Type::CharacterSelected && reply->character) {
-                if(reply->character->mapKey != "map_expanded") {
-                    setMessage(u8"Mapa tej postaci nie jest jeszcze dostępna.");
+            if(operation == Operation::Select && reply->type == ServerReply::Type::CharacterSelected && reply->character) {
+                operation = Operation::Download;
+                pending = app.gameClient().downloadMap();
+                setMessage(u8"Pobieranie mapy z serwera...");
+                updateControls();
+                continue;
+            }
+            if(operation == Operation::Download && reply->type == ServerReply::Type::MapData) {
+                const auto character = app.gameClient().selectedCharacter();
+                Map map;
+                if(!character || !map.loadTilemap(reply->mapData, "Assets/Graphics/TileSet_001.png")) {
+                    std::cerr << map.error() << std::endl;
+                    setMessage(u8"Nie udało się wczytać mapy z serwera.");
                     updateControls();
                     continue;
                 }
                 enteringGame = true;
-                App::sceneManager->changeScene(createScene2, app);
+                App::sceneManager->changeScene([map = std::move(map), character = *character]() mutable {
+                    return createNetworkGameScene(std::move(map), std::move(character));
+                }, app);
                 return;
             }
-            if(!selecting && reply->type == ServerReply::Type::Characters) {
+            if(operation == Operation::List && reply->type == ServerReply::Type::Characters) {
                 page = requestedPage;
                 cursors.resize(page + 1); cursors[page] = requestedCursor;
                 characters = std::move(reply->characters);

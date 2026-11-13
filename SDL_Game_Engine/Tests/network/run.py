@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT.parent / "server/test/fixtures"
 CLIENT = ROOT / "build/tests/network/client.exe"
 CHARACTER_ID = 9007199254741009
+MAP = ROOT / "Game/Assets/Maps/Map_expanded.tmj"
 
 
 def receive_exact(connection, count):
@@ -89,6 +90,20 @@ def run_case(mode, ca_file, tls_version):
                         if mode == "expired":
                             time.sleep(0.1)
                             send(connection, {"type": "error", "code": "session_expired"})
+                    elif kind == "get_map" and mode in {"map", "map_wrong_key", "map_truncated"}:
+                        assert message == {"type": "get_map"}
+                        data = MAP.read_bytes()
+                        key = "map_example2" if mode == "map_wrong_key" else "map_expanded"
+                        send(connection, {"type": "map_data", "map_key": key, "size": len(data)})
+                        if mode == "map_wrong_key":
+                            return
+                        if mode == "map_truncated":
+                            data = data[:4096]
+                        for offset in range(0, len(data), 4096):
+                            chunk = data[offset:offset + 4096]
+                            connection.sendall(struct.pack("!I", len(chunk)) + chunk)
+                        if mode == "map_truncated":
+                            return
                     else:
                         raise AssertionError("Unexpected request type")
         except (EOFError, ssl.SSLError, ConnectionError, TimeoutError):
@@ -130,6 +145,9 @@ def run_case(mode, ca_file, tls_version):
     if mode in {"tls12", "tls13", "expired", "unicode_path"}:
         assert [kind for _, kind in requests] == ["login", "list_characters", "select_character"]
         assert {number for number, _ in requests} == {0}, "Scenes would require a new login connection"
+    if mode.startswith("map"):
+        assert [kind for _, kind in requests] == ["login", "list_characters", "select_character", "get_map"]
+        assert {number for number, _ in requests} == {0}
     print(result.stdout.strip())
 
 
@@ -141,13 +159,13 @@ def main():
         unicode_ca = Path(directory) / "Zażółć 🔐" / "zaufany-Żółw.crt"
         unicode_ca.parent.mkdir()
         unicode_ca.write_bytes((FIXTURES / "ca.crt").read_bytes())
-        for mode in ["tls12", "tls13", "unicode_path", "invalid_credentials", "hostname", "untrusted", "oversized", "expired", "cancel", "timeout", "missing_ca"]:
+        for mode in ["tls12", "tls13", "unicode_path", "invalid_credentials", "hostname", "untrusted", "oversized", "expired", "cancel", "timeout", "missing_ca", "map", "map_wrong_key", "map_truncated"]:
             ca = wrong_ca if mode == "untrusted" else Path(directory) / "missing.crt" if mode == "missing_ca" else FIXTURES / "ca.crt"
             if mode == "unicode_path":
                 ca = unicode_ca
             version = ssl.TLSVersion.TLSv1_2 if mode == "tls12" else ssl.TLSVersion.TLSv1_3
             run_case(mode, ca, version)
-    print("11 native TLS scenarios passed.")
+    print("14 native TLS scenarios passed.")
 
 
 if __name__ == "__main__":

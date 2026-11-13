@@ -64,6 +64,7 @@ lifecycle(Port) ->
         Login = login(S, upper(Username)),
         UserId = maps:get(<<"user_id">>, Login),
         ?assertEqual(Username, maps:get(<<"username">>, Login)),
+        ?assertEqual(error_reply(character_required), request(S, <<"get_map">>)),
         {ok, _, [{Hash}]} = server_db:query("SELECT password_hash FROM public.users WHERE id = $1", [UserId]),
         ?assertMatch(<<"$argon2id$v=19$m=19456,t=2,p=1$", _/binary>>, Hash),
         ?assertNotEqual(password(), Hash),
@@ -83,8 +84,11 @@ lifecycle(Port) ->
                            <<"character">> := #{<<"id">> := OwnCharacter,
                                                 <<"map_key">> := <<"map_expanded">>}},
                          select(S, OwnCharacter)),
+            check_map_download(S),
             ?assertEqual(error_reply(character_not_found), select(T, OwnCharacter)),
+            ?assertEqual(error_reply(character_required), request(T, <<"get_map">>)),
             ?assertMatch(#{<<"type">> := <<"logout_ok">>}, request(S, <<"logout">>)),
+            ?assertEqual(error_reply(authentication_required), request(S, <<"get_map">>)),
             ?assertEqual(error_reply(authentication_required), select(S, OwnCharacter)),
             ?assertMatch(#{<<"type">> := <<"characters">>}, request(T, <<"list_characters">>))
         end)
@@ -93,6 +97,21 @@ lifecycle(Port) ->
         ?assertEqual(error_reply(authentication_required), request(S, <<"list_characters">>)),
         login(S, Username)
     end).
+
+check_map_download(Socket) ->
+    #{<<"type">> := <<"map_data">>, <<"map_key">> := <<"map_expanded">>, <<"size">> := Size} =
+        request(Socket, <<"get_map">>),
+    {ok, Expected} = file:read_file("../SDL_Game_Engine/Game/Assets/Maps/Map_expanded.tmj"),
+    ?assert(Size > 4096),
+    ?assertEqual(byte_size(Expected), Size),
+    ?assertEqual(Expected, iolist_to_binary(receive_map(Socket, Size, []))),
+    ?assertEqual(#{<<"type">> => <<"pong">>}, request(Socket, <<"ping">>)).
+
+receive_map(_, 0, Chunks) -> lists:reverse(Chunks);
+receive_map(Socket, Size, Chunks) ->
+    {ok, Chunk} = ssl:recv(Socket, 0, 5000),
+    ?assertEqual(min(4096, Size), byte_size(Chunk)),
+    receive_map(Socket, Size - byte_size(Chunk), [Chunk | Chunks]).
 
 expiration(Port) ->
     Username = unique(<<"expiry">>),

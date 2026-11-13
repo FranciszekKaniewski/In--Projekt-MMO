@@ -10,9 +10,11 @@
 class Scene2 : public GameScene {
 private:
     Map map;
+    std::optional<CharacterState> saved;
 
 public:
-    Scene2() : GameScene() {}
+    Scene2() = default;
+    Scene2(Map loaded, CharacterState character) : map(std::move(loaded)), saved(std::move(character)) {}
 
     void onEnter(App& app) override {
         std::cout << "Entering Game Scene !" << std::endl;
@@ -23,7 +25,7 @@ public:
 
         map.scale = 1.0f;
         map.position = {};
-        if (!map.load("Assets/Maps/Map_expanded.tmj")) {
+        if (!map.isLoaded() && !map.load("Assets/Maps/Map_expanded.tmj")) {
             std::cerr << map.error() << std::endl;
         }
         const auto mapSize = map.isLoaded() ? map.worldSize() : math::Vector2{width, centerY * 2.0f};
@@ -33,8 +35,7 @@ public:
         auto spawn = map.isLoaded()
             ? map.position + math::Vector2{1350.0f, 1320.0f} * map.scale
             : math::Vector2{width * 0.5f, centerY};
-        const auto saved = app.serverClient ? app.serverClient->selectedCharacter() : std::nullopt;
-        if(saved && saved->mapKey == "map_expanded") spawn = {saved->x, saved->y};
+        if(saved) spawn = {saved->x, saved->y};
         const auto player = spawnPlayer(world, spawn);
         if (!player) return;
         if(saved) {
@@ -89,4 +90,8 @@ protected:
 
 Scene* createScene2() {
     return new Scene2();
+}
+
+Scene* createNetworkGameScene(Map map, CharacterState character) {
+    return new Scene2(std::move(map), std::move(character));
 }

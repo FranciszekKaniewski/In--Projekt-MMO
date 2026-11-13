@@ -6,12 +6,15 @@
 #include <SDL_image.h>
 #include <deque>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 
 namespace {
 class FakeGameClient : public GameClient {
 public:
     bool authenticated = false;
     int disconnects = 0, logins = 0;
+    int mapDownloads = 0;
     RequestId current = 0;
     std::string username, password;
     std::vector<std::int64_t> cursors, selections;
@@ -22,6 +25,7 @@ public:
     }
     RequestId listCharacters(std::int64_t cursor) override { cursors.push_back(cursor); return ++current; }
     RequestId selectCharacter(std::int64_t id) override { selections.push_back(id); return ++current; }
+    RequestId downloadMap() override { ++mapDownloads; return ++current; }
     std::optional<ServerReply> poll() override {
         if(replies.empty()) return std::nullopt;
         auto reply = std::move(replies.front()); replies.pop_front(); return reply;
@@ -158,6 +162,24 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     ServerReply reply; reply.request = canvas.client->current;
     reply.type = ServerReply::Type::CharacterSelected; reply.character = state;
     canvas.client->replies.push_back(reply); canvas.update();
+    REQUIRE(canvas.client->mapDownloads == 1);
+    REQUIRE_FALSE(dynamic_cast<GameScene*>(App::sceneManager->activeScene));
+    ServerReply downloaded;
+    downloaded.request = canvas.client->current;
+    downloaded.type = ServerReply::Type::MapData;
+    downloaded.mapData = "{}";
+    canvas.client->replies.push_back(downloaded); canvas.update();
+    REQUIRE_FALSE(dynamic_cast<GameScene*>(App::sceneManager->activeScene));
+    REQUIRE(canvas.client->isAuthenticated());
+    canvas.click(880, 604);
+    reply.request = canvas.client->current;
+    canvas.client->replies.push_back(reply); canvas.update();
+    REQUIRE(canvas.client->mapDownloads == 2);
+    std::ifstream input("Assets/Maps/Map_expanded.tmj", std::ios::binary);
+    REQUIRE(input.good());
+    downloaded.request = canvas.client->current;
+    downloaded.mapData.assign(std::istreambuf_iterator<char>(input), {});
+    canvas.client->replies.push_back(std::move(downloaded)); canvas.update();
     auto* game = dynamic_cast<GameScene*>(App::sceneManager->activeScene);
     REQUIRE(game);
     REQUIRE(canvas.client->isAuthenticated());

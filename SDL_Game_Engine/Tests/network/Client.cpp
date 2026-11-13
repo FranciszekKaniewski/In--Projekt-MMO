@@ -1,6 +1,8 @@
 #include "../../Engine/Network/GameClient.h"
 #include <chrono>
 #include <iostream>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <thread>
 #include <codecvt>
@@ -58,6 +60,21 @@ int wmain(int argc, wchar_t** argv) {
             const auto selection = await(*client, client->selectCharacter(list.characters[0].id));
             require(selection.type == ServerReply::Type::CharacterSelected && selection.character.has_value(), "Selection failed");
             require(client->selectedCharacter()->x == 1350 && client->selectedCharacter()->facing == 4, "Character state was not retained");
+            if(mode == "map" || mode == "map_wrong_key" || mode == "map_truncated") {
+                const auto downloaded = await(*client, client->downloadMap());
+                if(mode == "map") {
+                    std::ifstream map("Game/Assets/Maps/Map_expanded.tmj", std::ios::binary);
+                    require(map.good(), "Missing map fixture");
+                    const std::string expected((std::istreambuf_iterator<char>(map)), {});
+                    require(downloaded.type == ServerReply::Type::MapData && downloaded.mapData == expected,
+                            "Map transfer changed the file contents");
+                    require(client->isAuthenticated(), "Map download closed the session");
+                } else {
+                    const std::string expected = mode == "map_wrong_key" ? "invalid_response" : "connection_closed";
+                    require(downloaded.type == ServerReply::Type::Error && downloaded.error == expected,
+                            "Bad map transfer was accepted");
+                }
+            }
             if(mode == "expired") {
                 const auto expired = await(*client, 0);
                 require(expired.error == "session_expired" && !client->isAuthenticated(), "Expiration did not revoke the session");

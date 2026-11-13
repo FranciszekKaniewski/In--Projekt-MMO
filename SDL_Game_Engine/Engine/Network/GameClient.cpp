@@ -13,6 +13,8 @@
 namespace {
 using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
+constexpr std::size_t maxMapBytes = 1024 * 1024;
+constexpr std::size_t mapFrameBytes = 4096;
 
 std::int64_t integer(const Json& value, std::int64_t minimum = 1) {
     if(!value.is_number_integer() ||
@@ -104,6 +106,35 @@ class AsyncGameClient final : public GameClient {
     TlsConnection connection;
     std::thread worker;
 
+    ServerReply receiveReply(const Command& command, std::chrono::milliseconds timeout) {
+        const auto frame = connection.receiveFrame(timeout);
+        if(!frame) throw NetworkError("connection_timeout");
+        const auto header = Json::parse(*frame);
+        if(command.body.at("type") != "get_map" || header.at("type") == "error")
+            return decode(header, command);
+
+        const auto character = selectedCharacter();
+        if(header.at("type") != "map_data" || !character || header.at("map_key") != character->mapKey)
+            throw NetworkError("invalid_response");
+        const auto size = integer(header.at("size"));
+        if(size > static_cast<std::int64_t>(maxMapBytes)) throw NetworkError("invalid_response");
+        ServerReply reply;
+        reply.request = command.id;
+        reply.type = ServerReply::Type::MapData;
+        reply.mapData.reserve(static_cast<std::size_t>(size));
+        const auto deadline = Clock::now() + timeout;
+        while(reply.mapData.size() < static_cast<std::size_t>(size)) {
+            const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(deadline - Clock::now());
+            if(remaining.count() <= 0) throw NetworkError("connection_timeout");
+            const auto chunk = connection.receiveFrame(remaining);
+            if(!chunk) throw NetworkError("connection_timeout");
+            if(chunk->size() != std::min(mapFrameBytes, static_cast<std::size_t>(size) - reply.mapData.size()))
+                throw NetworkError("invalid_response");
+            reply.mapData += *chunk;
+        }
+        return reply;
+    }
+
     RequestId enqueue(Json message) {
         std::lock_guard<std::mutex> lock(mutex);
         const auto id = nextId++;
@@ -163,9 +194,7 @@ class AsyncGameClient final : public GameClient {
                     command->body.erase("password");
                     connection.sendFrame(body, timeout);
                     std::fill(body.begin(), body.end(), '\0');
-                    const auto frame = connection.receiveFrame(timeout);
-                    if(!frame) throw NetworkError("connection_timeout");
-                    auto reply = decode(Json::parse(*frame), *command);
+                    auto reply = receiveReply(*command, timeout);
                     if(reply.type == ServerReply::Type::Error && (loginRequest || sessionLost(reply.error))) {
                         connection.close(); connected = false; clearSession(activeGeneration);
                     }
@@ -215,6 +244,7 @@ public:
     RequestId selectCharacter(std::int64_t id) override {
         return enqueue({{"type", "select_character"}, {"character_id", id}});
     }
+    RequestId downloadMap() override { return enqueue({{"type", "get_map"}}); }
     std::optional<ServerReply> poll() override {
         std::lock_guard<std::mutex> lock(mutex);
         if(replies.empty()) return std::nullopt;
@@ -255,6 +285,8 @@ std::string serverErrorText(const std::string& code) {
     if(code == "connection_failed") return u8"Nie można połączyć się z serwerem.";
     if(sessionLost(code)) return u8"Sesja wygasła. Zaloguj się ponownie.";
     if(code == "character_not_found") return u8"Wybrana postać jest niedostępna. Odśwież listę.";
+    if(code == "character_required") return u8"Wybierz postać przed pobraniem mapy.";
+    if(code == "map_not_found" || code == "map_unavailable") return u8"Mapa postaci jest niedostępna na serwerze.";
     if(code == "invalid_response") return u8"Serwer zwrócił niepoprawną odpowiedź.";
     return u8"Operacja nie powiodła się. Spróbuj ponownie.";
 }

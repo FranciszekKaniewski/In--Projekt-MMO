@@ -1,7 +1,7 @@
 # Mapa świata
 
-`Map` wczytuje przestrzenny eksport taki jak dostarczony `Map_example.json` i odpowiadający mu obraz.
-Przykład zawiera siatkę 80 × 80 pól po 16 × 16 px, o wymiarach 1280 × 1280 px.
+`Map` wczytuje tilemapy Tiled (`.tmj`) oraz przestrzenny eksport taki jak
+`Map_example.json` z odpowiadającym mu obrazem.
 
 ```cpp
 #include "Engine/World/Map.h"
@@ -10,7 +10,7 @@ Przykład zawiera siatkę 80 × 80 pól po 16 × 16 px, o wymiarach 1280 × 1280
 Map map;
 
 // W onEnter(), po utworzeniu renderera przez App:
-if (!map.load("Assets/Maps/Map_example.json")) {
+if (!map.load("Assets/Maps/Map_example2.tmj")) {
     std::cerr << map.error() << '\n';
 }
 map.position = {0.0f, 0.0f}; // Lewy górny narożnik w świecie.
@@ -20,7 +20,11 @@ map.scale = 1.0f;           // Jeden piksel obrazu odpowiada jednostce świata.
 map.draw(app.renderer, camera());
 ```
 
-`Scene2` korzysta z nowej mapy `Map_expanded.json`: 2560 × 2560 px, czyli 160 × 160 pól
+Po kliknięciu `Play` klient pobiera TMJ z serwera, składa mapę przez
+`loadTilemap()` z lokalnym `Assets/Graphics/TileSet_001.png` i przekazuje ją
+do `Scene2` razem z danymi postaci. Pobieranie korzysta z sesji TLS.
+
+`Map_expanded.tmj` ma 2560 × 2560 px, czyli 160 × 160 pól
 po 16 × 16 px. To dwukrotnie większa szerokość i wysokość niż w przykładzie (czterokrotnie
 większa powierzchnia), bez powiększania pikseli grafiki. W scenie, przy skali 1, świat ma
 2560 × 2560 jednostek, a pole zajmuje 16 × 16 jednostek.
@@ -29,30 +33,16 @@ WASD lub strzałki poruszają graczem. Kamera śledzi go i zatrzymuje się na gr
 Obiekty ECS są rysowane na mapie przez `GameScene`. Zmiana rozdzielczości okna korzysta ze wspólnej
 projekcji silnika, bez zmiany rozmiaru świata ani zasięgu kamery w jednostkach świata.
 
-## Rozbudowana wyspa
+## Tilemapy Tiled
 
-`Game/Assets/Maps/Map_expanded.png` wykorzystuje wyłącznie oryginalny `TileSet_001.png`:
-wodę, ziemię, trawę i ich krawędzie w natywnym rozmiarze. `Map_example.png` jest wzorem
-zarysu wyspy. Rozbudowany teren zawiera plaże, jezioro ze strumieniem, mniejszy staw,
-sieć ścieżek, przejście z lądu przez strumień oraz małe wysepki. Kafelki zachowują oryginalne
-kolory i przezroczystość; generator nie dorysowuje grafiki ani dekoracji.
-Całość pozostaje jednym obrazem zgodnym z loaderem `Map`.
-Oryginalne pliki `Map_example.*` pozostają dostępne.
+`Map_expanded.tmj` i `Map_example2.tmj` używają tego samego atlasu.
+Loader obsługuje skończone mapy ortogonalne z jednym osadzonym opisem atlasu
+oraz wyrównanymi warstwami kafelków o rozmiarze mapy. Tablice `data` zawierają
+liczbowe GID-y bez flag odbicia. `0` oznacza puste pole. Warstwy są składane
+w kolejności zapisu, z uwzględnieniem widoczności i przezroczystości.
+Loader składa je raz do jednej tekstury rysowanej przez kamerę.
 
-Źródłem nowej mapy jest `Tools/generate_expanded_map.py`. Ponowny eksport:
-
-```powershell
-python Tools/generate_expanded_map.py
-make build
-```
-
-Generator wymaga pakietu Pillow i zawsze odtwarza ten sam układ terenu.
-Punkty ścieżek, kształt jeziora, strumienia i wysepek są edytowalne w skrypcie.
-Podglądy całej wyspy i centralnego obszaru trafiają do `build/map-preview`.
-Python i Pillow nie są potrzebne do uruchamiania gry.
-Ta mapa nie dodaje kolizji ani interaktywnych obiektów.
-
-## Format i grafika
+## Eksport obrazowy
 
 JSON zawiera tablicę `frames`, gdzie `frame.x/y/w/h` opisują pola gotowego obrazu,
 oraz `meta.size.w/h`, określające rozmiar całej mapy.
@@ -78,7 +68,7 @@ Grafika jest wybierana w następującej kolejności:
 
 Jawny `imageOverride` jest ścieżką względem katalogu uruchomienia lub ścieżką absolutną.
 Wymiary obrazu muszą zgadzać się z `meta.size`. Tekstura korzysta z filtrowania nearest.
-`make build` kopiuje oba pliki do `build/Assets/Maps`. Aseprite nie jest potrzebny do uruchomienia gry.
+`make build` kopiuje zasoby z `Game/Assets` do `build/Assets`.
 
 ## Własność i błędy
 
@@ -90,9 +80,5 @@ Wymiary obrazu muszą zgadzać się z `meta.size`. Tekstura korzysta z filtrowan
 - `columns()/rows()`, `tileWidth()/tileHeight()` i `tileCount()` opisują siatkę eksportu.
 - Dodatnia skończona `scale` i skończona `position` są wymagane do rysowania.
 
-Ten format nie ma danych kolizji, punktów startowych ani oddzielnych warstw do rysowania przed graczem.
-Ich nazwy w `meta.layers` nie zawierają układu pól. Kolizje, drzewa z HP i edycja pojedynczych kafelków
-wymagają dodatkowych danych; loader nie odgaduje ich z kolorów obrazu.
-
-Testy: `make test-map` sprawdza rzeczywiste piksele, pozycję, skalowanie, walidację,
-zachowanie poprzedniej mapy po błędzie oraz dostarczony eksport wyspy.
+`make test-map` sprawdza piksele, pozycję, skalowanie, składanie warstw,
+zachowanie poprzedniej mapy po błędzie oraz wczytywanie obu plików TMJ.

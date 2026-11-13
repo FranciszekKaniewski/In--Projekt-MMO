@@ -32,7 +32,7 @@ handle_cast(_, State) -> {noreply, State}.
 handle_info({ssl, Socket, Data}, #{socket := Socket, ready := true} = State) ->
     {Reply, Updated} = server_protocol:handle(Data, State),
     Next = update_timer(State, Updated),
-    case ssl:send(Socket, json:encode(Reply)) of
+    case send_reply(Socket, Reply) of
         ok ->
             case ssl:setopts(Socket, [{active, once}]) of
                 ok -> {noreply, Next};
@@ -49,6 +49,20 @@ handle_info({timeout, Timer, session}, #{timer := Timer, socket := Socket} = Sta
     end;
 handle_info({timeout, Timer, _}, #{timer := Timer} = State) -> {stop, normal, State};
 handle_info(_, State) -> {noreply, State}.
+
+send_reply(Socket, {map_data, Header, Bytes}) ->
+    case send_reply(Socket, Header) of
+        ok -> send_map(Socket, Bytes);
+        Error -> Error
+    end;
+send_reply(Socket, Reply) -> ssl:send(Socket, json:encode(Reply)).
+
+send_map(Socket, <<Chunk:4096/binary, Rest/binary>>) when byte_size(Rest) > 0 ->
+    case ssl:send(Socket, Chunk) of
+        ok -> send_map(Socket, Rest);
+        Error -> Error
+    end;
+send_map(Socket, Bytes) -> ssl:send(Socket, Bytes).
 
 update_timer(#{session_deadline := Previous}, #{session_deadline := Previous} = Next) -> Next;
 update_timer(#{timer := Timer}, Next) ->

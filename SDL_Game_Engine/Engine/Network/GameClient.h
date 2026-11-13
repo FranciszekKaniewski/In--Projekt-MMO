@@ -28,13 +28,14 @@ struct CharacterState : CharacterSummary {
 using RequestId = std::uint64_t;
 
 struct ServerReply {
-    enum class Type { Login, Characters, CharacterSelected, Error };
+    enum class Type { Login, Characters, CharacterSelected, MapData, Error };
     RequestId request = 0; // Zero denotes an unsolicited connection/session event.
     Type type = Type::Error;
     std::string error;
     std::vector<CharacterSummary> characters;
     bool hasMore = false;
     std::optional<CharacterState> character;
+    std::string mapData;
 };
 
 // The application owns the client, so changing scenes preserves the TLS session.
@@ -45,6 +46,7 @@ public:
     virtual RequestId login(std::string username, std::string password) = 0;
     virtual RequestId listCharacters(std::int64_t afterId = 0) = 0;
     virtual RequestId selectCharacter(std::int64_t id) = 0;
+    virtual RequestId downloadMap() = 0;
     virtual std::optional<ServerReply> poll() = 0;
     virtual bool isAuthenticated() const = 0;
     virtual std::optional<CharacterState> selectedCharacter() const = 0;

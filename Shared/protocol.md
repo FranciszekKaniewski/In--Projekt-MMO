@@ -9,6 +9,7 @@ Każde nowe połączenie rozpoczyna się bez zalogowanego konta.
 
 Wewnątrz TLS każda wiadomość zawiera 4 bajty długości treści (unsigned,
 big-endian), a następnie obiekt JSON w UTF-8, maksymalnie 4096 bajtów.
+Dane mapy opisane poniżej są przesyłane jako osobne ramki z bajtami pliku.
 Długość nie obejmuje nagłówka. `{packet, 4}` w Erlangu składa pełną ramkę
 i usuwa nagłówek; klient musi sam obsłużyć fragmentację i łączenie danych.
 Ramka powyżej limitu zamyka połączenie.
@@ -25,6 +26,7 @@ Nieznane dodatkowe pola są ignorowane; pole `user_id` klienta nie określa kont
 | `login` | Przed logowaniem | `login_ok` |
 | `list_characters` | Zalogowane konto | `characters` |
 | `select_character` | Zalogowane konto, własna postać | `character_selected` |
+| `get_map` | Zalogowane konto, wybrana postać | `map_data` i ramki z plikiem TMJ |
 | `logout` | Zalogowane konto | `logout_ok` |
 
 ```json
@@ -76,6 +78,18 @@ Po wygaśnięciu serwer może sam wysłać `session_expired`; klient musi obsłu
 wiadomości serwera niezależnie od oczekiwania na odpowiedź na żądanie.
 Następnie klient ma ponownie 60 s na logowanie.
 
+## Pobieranie mapy
+
+Po `character_selected` klient może wysłać `{"type":"get_map"}`. Serwer
+ustala klucz mapy na podstawie wybranej postaci i odpowiada nagłówkiem
+`{"type":"map_data","map_key":"map_expanded","size":274917}`. `size`
+to liczba bajtów w pliku TMJ, od 1 do 1 MiB. Bezpośrednio po nagłówku
+przychodzą ramki z kolejnymi bajtami pliku. Każda zawiera 4096 bajtów lub
+tyle, ile pozostało do końca pliku. Wszystkie ramki mają ten sam
+czterobajtowy nagłówek długości. Po zebraniu `size` bajtów połączenie wraca
+do zwykłych wiadomości JSON. Klient składa mapę z pobranego TMJ i lokalnego
+atlasu `Assets/Graphics/TileSet_001.png`.
+
 ## Błędy
 
 ```json
@@ -93,6 +107,9 @@ Następnie klient ma ponownie 60 s na logowanie.
 | `authentication_required` | Operacja wymaga logowania |
 | `already_authenticated` | Zalogowany klient próbuje ponownie logować lub rejestrować |
 | `character_not_found` | Postać nie istnieje albo należy do innego konta |
+| `character_required` | Przed pobraniem mapy trzeba wybrać postać |
+| `map_not_found` | Serwer nie obsługuje klucza mapy zapisanej dla postaci |
+| `map_unavailable` | Serwer nie może odczytać pliku TMJ lub plik ma nieprawidłowy rozmiar |
 | `session_expired` | Sesja wygasła; konto i wybór postaci zostały usunięte z sesji |
 | `rate_limited` | Przekroczony limit prób; zaczekaj na koniec okna limitu |
 | `server_busy` | Brak wolnego miejsca na operację uwierzytelnienia; spróbuj później |
