@@ -207,4 +207,49 @@ TEST_CASE_METHOD(MapSDLFixture, "Example island map loads its matching PNG", "[i
     canvas.savePreview("Map-preview.png");
 }
 
+TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "[integration][map]") {
+    MapCanvas canvas;
+    fixture();
+    const auto layer = [](std::vector<int> gids, bool visible) {
+        return Json{{"type", "tilelayer"}, {"width", 2}, {"height", 2},
+                    {"data", std::move(gids)}, {"visible", visible}};
+    };
+    Json data{{"type", "map"}, {"orientation", "orthogonal"}, {"width", 2}, {"height", 2},
+        {"tilewidth", 2}, {"tileheight", 2},
+        {"tilesets", Json::array({{{"firstgid", 1}, {"image", "colors.bmp"},
+            {"tilewidth", 2}, {"tileheight", 2}, {"columns", 2}, {"tilecount", 4},
+            {"imagewidth", 4}, {"imageheight", 4}}})},
+        {"layers", Json::array({layer({1, 2, 0, 0}, true), layer({0, 3, 0, 4}, true),
+                                 layer({4, 4, 4, 4}, false)})}};
+    Map map;
+    REQUIRE(map.load(save(data, "map.tmj")));
+    map.scale = 4;
+    map.draw(App::renderer);
+    REQUIRE(canvas.isColorAt(1, 1, {255, 0, 0, 255}));
+    REQUIRE(canvas.isColorAt(9, 1, {0, 0, 255, 255}));
+    REQUIRE(canvas.isColorAt(1, 9, {0, 0, 0, 255}));
+    REQUIRE(canvas.isColorAt(9, 9, {255, 255, 0, 255}));
+
+    data["tilesets"][0]["image"] = "invalid.bmp";
+    const auto localAtlas = fixturePath / "colors.bmp";
+    REQUIRE(map.loadTilemap(data.dump(), localAtlas));
+    data["layers"][0]["data"][0] = 5;
+    REQUIRE_FALSE(map.loadTilemap(data.dump(), localAtlas));
+    REQUIRE(map.isLoaded());
+    REQUIRE(map.tileCount() == 4);
+}
+
+TEST_CASE_METHOD(MapSDLFixture, "Both supplied TMJ maps load with the game tileset", "[integration][map]") {
+    MapCanvas canvas;
+    Map map;
+    REQUIRE(map.load("Assets/Maps/Map_example2.tmj"));
+    REQUIRE(map.width() == 1280);
+    REQUIRE(map.tileWidth() == 32);
+    REQUIRE(map.tileCount() == 1600);
+    REQUIRE(map.load("Assets/Maps/Map_expanded.tmj"));
+    REQUIRE(map.width() == 2560);
+    REQUIRE(map.tileWidth() == 16);
+    REQUIRE(map.tileCount() == 25600);
+}
+
 } // namespace

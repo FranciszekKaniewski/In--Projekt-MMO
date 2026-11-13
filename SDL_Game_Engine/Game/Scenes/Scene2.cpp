@@ -23,7 +23,7 @@ public:
 
         map.scale = 1.0f;
         map.position = {};
-        if (!map.load("Assets/Maps/Map_expanded.json")) {
+        if (!map.load("Assets/Maps/Map_expanded.tmj")) {
             std::cerr << map.error() << std::endl;
         }
         const auto mapSize = map.isLoaded() ? map.worldSize() : math::Vector2{width, centerY * 2.0f};

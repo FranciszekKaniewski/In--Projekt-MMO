@@ -1,13 +1,16 @@
 #include "Map.h"
 
+#include "../Core/App.h"
 #include "../Renderer/TextureManager.h"
 #include "../ECS/Components/CameraComponent.h"
+#include <SDL_image.h>
 #include <nlohmann/json.hpp>
 
 #include <cmath>
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -27,8 +30,13 @@ int integer(const Json& object, const char* key, int minimum) {
 
 bool Map::load(const std::filesystem::path& jsonPath, const std::filesystem::path& imageOverride) {
     try {
-        std::ifstream input(jsonPath);
+        std::ifstream input(jsonPath, std::ios::binary);
         if (!input) throw std::runtime_error("Cannot open the map JSON.");
+        if (jsonPath.extension() == ".tmj") {
+            const std::string contents((std::istreambuf_iterator<char>(input)), {});
+            setTilemap(contents, jsonPath, imageOverride);
+            return true;
+        }
         const auto data = Json::parse(input);
         const auto& meta = data.at("meta");
         const int width = integer(meta.at("size"), "w", 1);
@@ -101,6 +109,117 @@ bool Map::load(const std::filesystem::path& jsonPath, const std::filesystem::pat
         lastError = "Cannot load map '" + jsonPath.u8string() + "': " + exception.what();
         return false;
     }
+}
+
+bool Map::loadTilemap(std::string_view json, const std::filesystem::path& localAtlas) {
+    try {
+        if (localAtlas.empty()) throw std::runtime_error("A local tileset is required.");
+        setTilemap(json, {}, localAtlas);
+        return true;
+    } catch (const std::exception& exception) {
+        lastError = exception.what();
+        return false;
+    }
+}
+
+void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
+                     const std::filesystem::path& imageOverride) {
+    const auto data = Json::parse(json);
+    if (data.value("type", "") != "map" || data.value("orientation", "") != "orthogonal" ||
+        data.value("infinite", false)) {
+        throw std::runtime_error("Expected a finite orthogonal Tiled map.");
+    }
+    const int columns = integer(data, "width", 1);
+    const int rows = integer(data, "height", 1);
+    const int tileWidth = integer(data, "tilewidth", 1);
+    const int tileHeight = integer(data, "tileheight", 1);
+    constexpr int maxDimension = 4096;
+    if (columns > maxDimension / tileWidth || rows > maxDimension / tileHeight) {
+        throw std::runtime_error("Tilemap exceeds the supported image size.");
+    }
+    const int width = columns * tileWidth, height = rows * tileHeight;
+    const auto count = static_cast<std::size_t>(columns) * rows;
+    const auto& tilesets = data.at("tilesets");
+    const auto& layers = data.at("layers");
+    if (!tilesets.is_array() || tilesets.size() != 1 || !layers.is_array() ||
+        layers.empty() || layers.size() > 16) {
+        throw std::runtime_error("Expected one tileset and up to 16 tile layers.");
+    }
+    const auto& tileset = tilesets.front();
+    if (tileset.contains("source") || integer(tileset, "firstgid", 1) != 1 ||
+        integer(tileset, "tilewidth", 1) != tileWidth || integer(tileset, "tileheight", 1) != tileHeight ||
+        tileset.value("spacing", 0) != 0 || tileset.value("margin", 0) != 0 || tileset.contains("tileoffset")) {
+        throw std::runtime_error("Expected an embedded tileset with matching tiles and no spacing or offset.");
+    }
+    const auto imagePath = imageOverride.empty()
+        ? path.parent_path() / std::filesystem::u8path(tileset.at("image").get<std::string>())
+        : imageOverride;
+    using Surface = std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)>;
+    const Surface source(IMG_Load(imagePath.u8string().c_str()), SDL_FreeSurface);
+    if (!source) throw std::runtime_error("Cannot load tileset: " + imagePath.u8string());
+    const int atlasColumns = integer(tileset, "columns", 1);
+    const int atlasCount = integer(tileset, "tilecount", 1);
+    if (source->w != integer(tileset, "imagewidth", 1) || source->h != integer(tileset, "imageheight", 1) ||
+        source->w % tileWidth || source->h % tileHeight || source->w / tileWidth != atlasColumns ||
+        atlasCount > static_cast<std::int64_t>(atlasColumns) * (source->h / tileHeight)) {
+        throw std::runtime_error("Tileset dimensions do not match the atlas.");
+    }
+    const Surface atlas(SDL_ConvertSurfaceFormat(source.get(), SDL_PIXELFORMAT_RGBA32, 0), SDL_FreeSurface);
+    const Surface image(SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32), SDL_FreeSurface);
+    if (!atlas || !image || SDL_FillRect(image.get(), nullptr, 0) != 0) throw std::runtime_error(SDL_GetError());
+
+    // Compose once so the camera can still draw one clipped texture per frame.
+    for (const auto& layer : layers) {
+        const auto opacity = layer.value("opacity", 1.0);
+        if (layer.value("type", "") != "tilelayer" || integer(layer, "width", 1) != columns ||
+            integer(layer, "height", 1) != rows || layer.value("x", 0) || layer.value("y", 0) ||
+            layer.value("offsetx", 0.0) || layer.value("offsety", 0.0) ||
+            layer.value("mode", "normal") != "normal" || !(opacity >= 0 && opacity <= 1)) {
+            throw std::runtime_error("Expected aligned full-size tile layers with normal blending.");
+        }
+        const auto& gids = layer.at("data");
+        if (!gids.is_array() || gids.size() != count) throw std::runtime_error("Invalid tile layer data.");
+        const bool visible = layer.value("visible", true);
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto& value = gids[i];
+            if (!value.is_number_integer() || value < 0 || value > atlasCount) {
+                throw std::runtime_error("Invalid or unsupported tile ID.");
+            }
+            const int gid = value.get<int>();
+            if (!gid || !visible || opacity == 0) continue;
+            const int sourceX = (gid - 1) % atlasColumns * tileWidth;
+            const int sourceY = (gid - 1) / atlasColumns * tileHeight;
+            const int x = static_cast<int>(i % columns) * tileWidth;
+            const int y = static_cast<int>(i / columns) * tileHeight;
+            for (int dy = 0; dy < tileHeight; ++dy) {
+                const auto* src = static_cast<const Uint8*>(atlas->pixels) + (sourceY + dy) * atlas->pitch + sourceX * 4;
+                auto* dst = static_cast<Uint8*>(image->pixels) + (y + dy) * image->pitch + x * 4;
+                for (int dx = 0; dx < tileWidth; ++dx, src += 4, dst += 4) {
+                    const int alpha = static_cast<int>(std::lround(src[3] * opacity));
+                    if (!alpha) continue;
+                    const int foreground = alpha * 255;
+                    const int background = dst[3] * (255 - alpha);
+                    const int total = foreground + background;
+                    for (int channel = 0; channel < 3; ++channel) {
+                        dst[channel] = static_cast<Uint8>((src[channel] * foreground +
+                            dst[channel] * background + total / 2) / total);
+                    }
+                    dst[3] = static_cast<Uint8>((total + 127) / 255);
+                }
+            }
+        }
+    }
+    if (!App::renderer) throw std::runtime_error("Cannot load a tilemap without a renderer.");
+    std::shared_ptr<SDL_Texture> replacement(SDL_CreateTextureFromSurface(App::renderer, image.get()), SDL_DestroyTexture);
+    if (!replacement || SDL_SetTextureScaleMode(replacement.get(), SDL_ScaleModeNearest) != 0 ||
+        SDL_SetTextureBlendMode(replacement.get(), SDL_BLENDMODE_BLEND) != 0) throw std::runtime_error(SDL_GetError());
+    texture = std::move(replacement);
+    imageWidth = width;
+    imageHeight = height;
+    cellWidth = tileWidth;
+    cellHeight = tileHeight;
+    cellCount = count;
+    lastError.clear();
 }
 
 void Map::draw(SDL_Renderer* renderer, const CameraComponent* camera) const {

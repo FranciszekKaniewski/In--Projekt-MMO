@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 
 struct CameraComponent;
 
@@ -17,6 +18,7 @@ public:
 
     bool load(const std::filesystem::path& jsonPath,
               const std::filesystem::path& imageOverride = {});
+    bool loadTilemap(std::string_view json, const std::filesystem::path& localAtlas);
     void draw(SDL_Renderer* renderer, const CameraComponent* camera = nullptr) const;
     void clear() noexcept;
 
@@ -32,6 +34,8 @@ public:
     const std::string& error() const noexcept { return lastError; }
 
 private:
+    void setTilemap(std::string_view json, const std::filesystem::path& path,
+                    const std::filesystem::path& imageOverride);
     std::shared_ptr<SDL_Texture> texture;
     int imageWidth = 0, imageHeight = 0;
     int cellWidth = 0, cellHeight = 0;
