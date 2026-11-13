@@ -41,6 +41,12 @@ Oczekiwany wynik: `{"type": "pong"}`. Opcje `--host` i `--port` pozwalają zmien
 adres. `server_listener:port().` w powłoce Erlanga pokazuje rzeczywisty port.
 Port `0` w konfiguracji oznacza, że system wybierze wolny port; używają go testy.
 `--cafile` wskazuje zaufany certyfikat CA, domyślnie `priv/tls/ca.crt`.
+Oba skrypty (`ping.py` i `auth.py`) czytają `GAME_HOST`, `GAME_PORT` i
+`GAME_CAFILE` z `server/.env`. Dla LAN ustaw `GAME_HOST` na adres serwera,
+a `GAME_CAFILE` na publiczny plik CA używany przez klientów, np.
+`priv/tls/lan/ca.crt`. Ścieżka `GAME_CAFILE` jest względna względem katalogu
+`server`. Zmienne środowiskowe mają pierwszeństwo przed `.env`, a argumenty
+`--host`, `--port` i `--cafile` pozwalają zmienić je dla jednego wywołania.
 
 Po kliknięciu `Play` klient wybiera postać i pobiera przypisany jej plik TMJ
 przez TLS. Klucze `map_expanded` i `map_example2` wskazują odpowiednio na

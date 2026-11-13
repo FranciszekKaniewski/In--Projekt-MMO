@@ -3,11 +3,10 @@
 import argparse
 import getpass
 import json
-from pathlib import Path
 import sys
 import unicodedata
 
-from ping import DEFAULT_CA, connect, request
+from ping import add_connection_arguments, connect, request
 
 
 PASSWORD_REQUIREMENTS = (
@@ -38,9 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["register", "login"])
     parser.add_argument("username")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=4000)
-    parser.add_argument("--cafile", type=Path, default=DEFAULT_CA)
+    add_connection_arguments(parser)
     args = parser.parse_args()
     if args.action == "register":
         print(PASSWORD_REQUIREMENTS)
