@@ -212,8 +212,15 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     REQUIRE(headAt(938));
     peer.x = 1710;
     canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
+    REQUIRE(headAt(938));
+    REQUIRE_FALSE(headAt(998));
+    App::deltaTime = 0.05f;
+    canvas.update();
+    REQUIRE(headAt(968));
+    canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
     REQUIRE_FALSE(headAt(938));
     REQUIRE(headAt(998));
+    App::deltaTime = 0.0f;
     canvas.client->snapshot = std::vector<WorldPlayer>{local}; canvas.update();
     REQUIRE_FALSE(headAt(998));
     SDL_Event enter{}; enter.type = SDL_KEYDOWN; enter.key.keysym.sym = SDLK_RETURN;

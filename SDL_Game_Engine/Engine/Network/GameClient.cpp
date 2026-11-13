@@ -218,12 +218,15 @@ class AsyncGameClient final : public GameClient {
         std::uint64_t connectionGeneration = 0;
         while(!stopping) {
             std::optional<Command> command;
+            std::chrono::milliseconds idleWait{50};
             {
                 std::unique_lock<std::mutex> lock(mutex);
                 if(commands.empty() && !connected)
                     wake.wait(lock, [&] { return stopping || !commands.empty(); });
                 if(stopping) break;
                 if(!commands.empty()) { command = std::move(commands.front()); commands.pop_front(); }
+                // Check more often for queued input while the world is active.
+                if(inWorld) idleWait = std::chrono::milliseconds(10);
             }
             if(connected && connectionGeneration != generation.load()) {
                 connection.close(); connected = false;
@@ -253,7 +256,7 @@ class AsyncGameClient final : public GameClient {
                     }
                     post(std::move(reply), activeGeneration);
                 } else if(connected) {
-                    const auto frame = connection.receiveFrame(std::chrono::milliseconds(50));
+                    const auto frame = connection.receiveFrame(idleWait);
                     if(!frame) continue;
                     const auto message = Json::parse(*frame);
                     if(message.value("type", "") == "world_state") { postWorld(message); continue; }

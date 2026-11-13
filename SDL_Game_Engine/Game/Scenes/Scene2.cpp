@@ -11,7 +11,18 @@
 #include "../Entities/Player.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <unordered_map>
+
+namespace {
+constexpr float snapshotInterval = 0.1f;
+
+struct NetworkPosition {
+    math::Vector2 start;
+    math::Vector2 target;
+    float elapsed = snapshotInterval;
+};
+}
 
 class Scene2 : public GameScene {
 private:
@@ -47,7 +58,15 @@ private:
                     entity = found->second;
                 }
             }
-            world.getComponent<TransformComponent>(entity).position = {state.x, state.y};
+            const auto position = world.getComponent<TransformComponent>(entity).position;
+            const math::Vector2 target{state.x, state.y};
+            auto* networkPosition = world.tryGetComponent<NetworkPosition>(entity);
+            if(!networkPosition) {
+                networkPosition = &world.addComponent<NetworkPosition>(entity, position, position);
+            }
+            if(networkPosition->target.x != target.x || networkPosition->target.y != target.y) {
+                *networkPosition = {position, target, 0.0f};
+            }
             auto& movement = world.getComponent<MovementComponent>(entity);
             movement.facing = static_cast<FacingDirection>(state.facing);
             movement.moving = state.moving;
@@ -113,6 +132,20 @@ protected:
             }
         }
         if(auto snapshot = app.serverClient->pollWorld()) applySnapshot(*snapshot);
+        // Update the same transform used by the sprite and the follow camera.
+        const float elapsed = App::deltaTime;
+        if(std::isfinite(elapsed) && elapsed > 0.0f) {
+            world.forEach<TransformComponent, NetworkPosition>(
+                [elapsed](ecs::Entity, TransformComponent& transform, NetworkPosition& position) {
+                    position.elapsed = std::min(position.elapsed + elapsed, snapshotInterval);
+                    if(position.elapsed == snapshotInterval) {
+                        transform.position = position.target;
+                    } else {
+                        transform.position = position.start + (position.target - position.start) *
+                            (position.elapsed / snapshotInterval);
+                    }
+                });
+        }
         if(pendingMove) return;
         const auto direction = world.getComponent<MovementInputComponent>(player).direction;
         const int dx = static_cast<int>(direction.x), dy = static_cast<int>(direction.y);

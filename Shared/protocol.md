@@ -117,8 +117,8 @@ a serwer zeruje wejście po sekundzie bez odświeżenia.
 
 `world_state` jest zdarzeniem wysyłanym co 100 ms niezależnie od odpowiedzi
 na żądania. Zawiera pełną listę aktywnych postaci na bieżącej mapie, w tym
-własną postać. Klient rysuje najnowszy odebrany stan i usuwa encje, których
-brakuje w kolejnej liście. Wyjście, wylogowanie, wygaśnięcie sesji i zamknięcie
+własną postać. Klient interpoluje pozycje do najnowszego stanu przez 100 ms
+i usuwa encje, których brakuje w kolejnej liście. Wyjście, wylogowanie, wygaśnięcie sesji i zamknięcie
 połączenia usuwają postać ze świata. Ruch jest przechowywany w pamięci,
 więc po ponownym wyborze postać startuje z pozycji zapisanej w PostgreSQL.
 
