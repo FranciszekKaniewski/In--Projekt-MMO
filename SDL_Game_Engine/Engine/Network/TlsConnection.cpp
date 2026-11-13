@@ -246,6 +246,8 @@ struct TlsConnection::Impl {
             if(!connected) closeSocket();
         }
         if(!connected) throw NetworkError("connection_failed");
+        const BOOL noDelay = TRUE;
+        setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay), sizeof(noDelay));
         TLS_PARAMETERS parameters{};
         parameters.grbitDisabledProtocols = SP_PROT_SSL2 | SP_PROT_SSL3 | SP_PROT_TLS1_0 | SP_PROT_TLS1_1;
         SCH_CREDENTIALS settings{};

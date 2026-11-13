@@ -10,17 +10,28 @@
 #include "../../Engine/World/Map.h"
 #include "../Entities/Player.h"
 #include <algorithm>
-#include <chrono>
 #include <cmath>
+#include <deque>
 #include <unordered_map>
 
 namespace {
-constexpr float snapshotInterval = 0.1f;
+constexpr double interpolationDelay = 0.045;
+constexpr float correctionDuration = 0.05f;
+constexpr float maxSmoothCorrection = 12.0f;
+constexpr std::size_t maxPendingInputs = 16;
+constexpr float movementSpeed = 160.0f;
 
-struct NetworkPosition {
-    math::Vector2 start;
-    math::Vector2 target;
-    float elapsed = snapshotInterval;
+struct RemoteSample {
+    std::int64_t tick;
+    math::Vector2 position;
+    math::Vector2 velocity;
+    FacingDirection facing;
+    bool moving;
+};
+
+struct MovementInput {
+    std::int64_t sequence;
+    math::Vector2 direction;
 };
 }
 
@@ -30,46 +41,100 @@ private:
     CharacterState saved;
     ecs::Entity player;
     std::unordered_map<std::int64_t, ecs::Entity> others;
-    RequestId pendingMove = 0;
-    int sentX = 0, sentY = 0;
-    std::chrono::steady_clock::time_point nextInput;
+    std::deque<MovementInput> pendingInputs;
+    std::int64_t nextSequence = 1;
+    std::int64_t latestTick = 0;
+    double renderTick = 0;
+    math::Vector2 predicted;
+    math::Vector2 correction;
+    FacingDirection predictedFacing = FacingDirection::South;
+    bool sentMovement = false;
 
-    void applySnapshot(const std::vector<WorldPlayer>& snapshot) {
+    math::Vector2 clampToMap(math::Vector2 position) const {
+        const auto size = map.worldSize();
+        return {std::clamp(position.x, 10.0f, size.x - 10.0f),
+                std::clamp(position.y, 5.0f, size.y - 5.0f)};
+    }
+
+    void predict(math::Vector2 direction) {
+        if(direction.lengthSquared() > 0) {
+            predicted = clampToMap(predicted + direction.normalized() * (movementSpeed * movementStep));
+            predictedFacing = movementFacing(direction);
+        }
+    }
+
+    void reconcile(const WorldPlayer& state) {
+        const auto displayed = predicted + correction;
+        while(!pendingInputs.empty() && pendingInputs.front().sequence <= state.inputAck)
+            pendingInputs.pop_front();
+        predicted = {state.x, state.y};
+        predictedFacing = static_cast<FacingDirection>(state.facing);
+        for(const auto& input : pendingInputs) predict(input.direction);
+        correction = displayed - predicted;
+        if(correction.lengthSquared() > maxSmoothCorrection * maxSmoothCorrection) correction = {};
+    }
+
+    void applySnapshot(const WorldSnapshot& snapshot) {
+        if(snapshot.tick <= latestTick) return;
+        latestTick = snapshot.tick;
+        const auto desiredTick = latestTick - interpolationDelay / worldStep;
+        renderTick = std::max(renderTick, desiredTick);
         for(auto it = others.begin(); it != others.end();) {
             const auto id = it->first;
-            if(std::none_of(snapshot.begin(), snapshot.end(), [id](const auto& state) { return state.id == id; })) {
+            if(std::none_of(snapshot.players.begin(), snapshot.players.end(),
+                            [id](const auto& state) { return state.id == id; })) {
                 world.destroyEntity(it->second);
                 it = others.erase(it);
             } else {
                 ++it;
             }
         }
-        for(const auto& state : snapshot) {
-            auto entity = player;
-            if(state.id != saved.id) {
-                const auto found = others.find(state.id);
-                if(found == others.end()) {
-                    entity = spawnPlayer(world, {state.x, state.y});
-                    if(!entity) continue;
-                    world.removeComponent<VelocityComponent>(entity);
-                    others.emplace(state.id, entity);
-                    world.getComponent<ChatSpeakerComponent>(entity).name = state.name;
-                } else {
-                    entity = found->second;
-                }
+        for(const auto& state : snapshot.players) {
+            if(state.id == saved.id) {
+                reconcile(state);
+                continue;
             }
-            const auto position = world.getComponent<TransformComponent>(entity).position;
-            const math::Vector2 target{state.x, state.y};
-            auto* networkPosition = world.tryGetComponent<NetworkPosition>(entity);
-            if(!networkPosition) {
-                networkPosition = &world.addComponent<NetworkPosition>(entity, position, position);
+            auto found = others.find(state.id);
+            if(found == others.end()) {
+                const auto entity = spawnPlayer(world, {state.x, state.y});
+                if(!entity) continue;
+                world.removeComponent<VelocityComponent>(entity);
+                world.addComponent<std::deque<RemoteSample>>(entity);
+                world.getComponent<ChatSpeakerComponent>(entity).name = state.name;
+                found = others.emplace(state.id, entity).first;
             }
-            if(networkPosition->target.x != target.x || networkPosition->target.y != target.y) {
-                *networkPosition = {position, target, 0.0f};
+            auto& samples = world.getComponent<std::deque<RemoteSample>>(found->second);
+            if(samples.size() == 4) samples.pop_front();
+            samples.push_back({snapshot.tick, {state.x, state.y}, {state.vx, state.vy},
+                               static_cast<FacingDirection>(state.facing), state.moving});
+        }
+    }
+
+    void updateRemotePlayers(float elapsed) {
+        if(!latestTick) return;
+        renderTick = std::min(renderTick + elapsed / worldStep, static_cast<double>(latestTick + 1));
+        for(const auto& entry : others) {
+            const auto entity = entry.second;
+            auto& samples = world.getComponent<std::deque<RemoteSample>>(entity);
+            while(samples.size() > 1 && samples[1].tick <= renderTick) samples.pop_front();
+            const auto& first = samples.front();
+            auto position = first.position;
+            bool moving = first.moving;
+            if(samples.size() > 1) {
+                const auto& second = samples[1];
+                const auto fraction = static_cast<float>(std::clamp(
+                    (renderTick - first.tick) / (second.tick - first.tick), 0.0, 1.0));
+                position += (second.position - first.position) * fraction;
+                moving = (second.position - first.position).lengthSquared() > 0;
+            } else {
+                const auto ahead = std::clamp(renderTick - first.tick, 0.0, 1.0);
+                position += first.velocity * static_cast<float>(ahead * worldStep);
+                moving = moving && ahead < 1.0;
             }
+            world.getComponent<TransformComponent>(entity).position = clampToMap(position);
             auto& movement = world.getComponent<MovementComponent>(entity);
-            movement.facing = static_cast<FacingDirection>(state.facing);
-            movement.moving = state.moving;
+            movement.facing = first.facing;
+            movement.moving = moving;
         }
     }
 
@@ -93,7 +158,8 @@ public:
         world.getComponent<MovementComponent>(player).facing = static_cast<FacingDirection>(saved.facing);
         world.addComponent<KeyboardControlComponent>(player);
         if(saved.id) {
-            // Input and animation still use ECS. The server owns the position.
+            predicted = {saved.x, saved.y};
+            predictedFacing = static_cast<FacingDirection>(saved.facing);
             world.removeComponent<VelocityComponent>(player);
         } else {
             auto& bounds = world.addComponent<MovementBoundsComponent>(player);
@@ -117,7 +183,6 @@ protected:
     void updateWorld(App& app) override {
         if(!saved.id || !app.serverClient || !player) return;
         while(auto reply = app.serverClient->poll()) {
-            if(reply->request == pendingMove) pendingMove = 0;
             if(reply->type == ServerReply::Type::Error) {
                 if(!app.serverClient->isAuthenticated()) {
                     app.loginMessage = serverErrorText(reply->error);
@@ -128,34 +193,27 @@ protected:
                     App::sceneManager->changeScene(createCharactersScene, app);
                     return;
                 }
-                nextInput = {};
             }
         }
-        if(auto snapshot = app.serverClient->pollWorld()) applySnapshot(*snapshot);
-        // Update the same transform used by the sprite and the follow camera.
+        while(auto snapshot = app.serverClient->pollWorld()) applySnapshot(*snapshot);
         const float elapsed = App::deltaTime;
-        if(std::isfinite(elapsed) && elapsed > 0.0f) {
-            world.forEach<TransformComponent, NetworkPosition>(
-                [elapsed](ecs::Entity, TransformComponent& transform, NetworkPosition& position) {
-                    position.elapsed = std::min(position.elapsed + elapsed, snapshotInterval);
-                    if(position.elapsed == snapshotInterval) {
-                        transform.position = position.target;
-                    } else {
-                        transform.position = position.start + (position.target - position.start) *
-                            (position.elapsed / snapshotInterval);
-                    }
-                });
-        }
-        if(pendingMove) return;
+        if(!std::isfinite(elapsed) || elapsed < 0) return;
+        updateRemotePlayers(elapsed);
         const auto direction = world.getComponent<MovementInputComponent>(player).direction;
-        const int dx = static_cast<int>(direction.x), dy = static_cast<int>(direction.y);
-        const auto now = std::chrono::steady_clock::now();
-        if(dx != sentX || dy != sentY || ((dx || dy) && now >= nextInput)) {
-            pendingMove = app.serverClient->moveInput(dx, dy);
-            sentX = dx;
-            sentY = dy;
-            nextInput = now + std::chrono::milliseconds(250);
+        const bool wantsToMove = direction.lengthSquared() > 0;
+        const auto before = predicted;
+        if(elapsed > 0 && (wantsToMove || sentMovement) &&
+           pendingInputs.size() < maxPendingInputs &&
+           app.serverClient->moveInput(nextSequence, static_cast<int>(direction.x), static_cast<int>(direction.y))) {
+            pendingInputs.push_back({nextSequence++, direction});
+            predict(direction);
+            sentMovement = wantsToMove;
         }
+        correction *= std::max(0.0f, 1.0f - elapsed / correctionDuration);
+        world.getComponent<TransformComponent>(player).position = clampToMap(predicted + correction);
+        auto& movement = world.getComponent<MovementComponent>(player);
+        movement.facing = predictedFacing;
+        movement.moving = (predicted - before).lengthSquared() > 0;
     }
 
     void renderWorld(App& app) override {

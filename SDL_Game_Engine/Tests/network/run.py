@@ -107,12 +107,15 @@ def run_case(mode, ca_file, tls_version):
                     elif kind == "enter_world" and mode == "world":
                         send(connection, {"type": "world_joined", "character": dict(CHARACTER, position_x=1352)})
                     elif kind == "move_input" and mode == "world":
-                        assert message == {"type": "move_input", "dx": 1, "dy": 0}
-                        for x in (1360, 1368):
-                            send(connection, {"type": "world_state", "map_key": "map_expanded", "players": [
-                                dict(CHARACTER, position_x=x, facing=2, moving=True),
-                                dict(CHARACTER, id=CHARACTER_ID + 1, name="Peer", moving=False)]})
-                        send(connection, {"type": "move_ok"})
+                        seq = message["seq"]
+                        assert seq in (1, 2)
+                        assert message == {"type": "move_input", "seq": seq, "dx": int(seq == 1), "dy": 0}
+                        send(connection, {"type": "world_state", "map_key": "map_expanded", "tick": 9 + seq,
+                                          "players": [
+                            dict(CHARACTER, position_x=1352 + 8 * seq, facing=2, moving=seq == 1,
+                                 input_ack=seq, vx=160 if seq == 1 else 0, vy=0),
+                            dict(CHARACTER, id=CHARACTER_ID + 1, name="Peer", moving=False,
+                                 input_ack=0, vx=0, vy=0)]})
                     elif kind == "leave_world" and mode == "world":
                         send(connection, {"type": "world_left"})
                     else:
@@ -159,6 +162,9 @@ def run_case(mode, ca_file, tls_version):
     if mode.startswith("map"):
         assert [kind for _, kind in requests] == ["login", "list_characters", "select_character", "get_map"]
         assert {number for number, _ in requests} == {0}
+    if mode == "world":
+        assert [kind for _, kind in requests] == ["login", "list_characters", "select_character",
+            "enter_world", "move_input", "move_input", "list_characters", "leave_world", "list_characters"]
     print(result.stdout.strip())
 
 

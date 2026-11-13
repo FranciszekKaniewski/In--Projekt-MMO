@@ -84,12 +84,17 @@ int wmain(int argc, wchar_t** argv) {
                 const auto joined = await(*client, client->enterWorld());
                 require(joined.type == ServerReply::Type::WorldJoined && joined.character->x == 1352,
                         "Server spawn was not applied");
-                require(await(*client, client->moveInput(1, 0)).type == ServerReply::Type::Move,
-                        "World event interrupted the movement response");
+                require(client->moveInput(1, 1, 0) && client->moveInput(2, 0, 0),
+                        "Inputs could not be queued");
+                require(await(*client, client->listCharacters()).type == ServerReply::Type::Characters,
+                        "World events interrupted an ordinary reply");
+                const auto first = client->pollWorld();
                 const auto state = client->pollWorld();
-                require(state && state->size() == 2 && state->front().id == 9007199254741009LL &&
-                        state->front().x == 1368 && state->front().moving && state->back().name == "Peer",
-                        "The latest world snapshot was not delivered");
+                require(first && first->tick == 10 && state && state->tick == 11 && state->players.size() == 2 &&
+                        state->players.front().id == 9007199254741009LL && state->players.front().x == 1368 &&
+                        state->players.front().inputAck == 2 && !state->players.front().moving &&
+                        state->players.back().name == "Peer" && !client->pollWorld(),
+                        "Snapshots were not delivered in tick order");
                 require(await(*client, client->leaveWorld()).type == ServerReply::Type::WorldLeft,
                         "Leave world failed");
                 require(!client->pollWorld() && client->isAuthenticated(), "Leaving retained stale world state");

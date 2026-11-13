@@ -10,8 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace {
-FacingDirection facingFor(math::Vector2 direction) {
+FacingDirection movementFacing(math::Vector2 direction) {
     if (direction.y < 0.0f) {
         if (direction.x < 0.0f) return FacingDirection::NorthWest;
         if (direction.x > 0.0f) return FacingDirection::NorthEast;
@@ -24,7 +23,6 @@ FacingDirection facingFor(math::Vector2 direction) {
     }
     return direction.x < 0.0f ? FacingDirection::West : FacingDirection::East;
 }
-}
 
 void updateMovement(ecs::Registry& world, float deltaTime) {
     if (deltaTime < 0.0f || !std::isfinite(deltaTime)) return;
@@ -35,7 +33,7 @@ void updateMovement(ecs::Registry& world, float deltaTime) {
             auto direction = input.direction;
             if (!std::isfinite(direction.x) || !std::isfinite(direction.y)) direction = {};
             if (direction.lengthSquared() > 1.0f) direction.normalize();
-            if (direction.x != 0.0f || direction.y != 0.0f) movement.facing = facingFor(direction);
+            if (direction.x != 0.0f || direction.y != 0.0f) movement.facing = movementFacing(direction);
 
             const float speed = std::isfinite(movement.speed) && movement.speed > 0.0f
                 ? movement.speed : 0.0f;

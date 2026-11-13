@@ -23,7 +23,8 @@ public:
     std::vector<std::int64_t> cursors, selections;
     std::deque<ServerReply> replies;
     std::optional<CharacterState> selected;
-    std::optional<std::vector<WorldPlayer>> snapshot;
+    std::optional<WorldSnapshot> snapshot;
+    std::vector<std::array<std::int64_t, 3>> movementInputs;
     RequestId login(std::string name, std::string secret) override {
         ++logins; username = std::move(name); password = std::move(secret); return ++current;
     }
@@ -31,9 +32,12 @@ public:
     RequestId selectCharacter(std::int64_t id) override { selections.push_back(id); return ++current; }
     RequestId downloadMap() override { ++mapDownloads; return ++current; }
     RequestId enterWorld() override { ++worldEntries; return ++current; }
-    RequestId moveInput(int, int) override { return ++current; }
+    bool moveInput(std::int64_t seq, int dx, int dy) override {
+        movementInputs.push_back({seq, dx, dy});
+        return true;
+    }
     RequestId leaveWorld() override { ++worldLeaves; return ++current; }
-    std::optional<std::vector<WorldPlayer>> pollWorld() override { return std::exchange(snapshot, std::nullopt); }
+    std::optional<WorldSnapshot> pollWorld() override { return std::exchange(snapshot, std::nullopt); }
     std::optional<ServerReply> poll() override {
         if(replies.empty()) return std::nullopt;
         auto reply = std::move(replies.front()); replies.pop_front(); return reply;
@@ -208,21 +212,54 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     const WorldPlayer local{{state.id, state.name}, 1350, 1320, 4, false};
     WorldPlayer peer{{42, "Peer"}, 1650, 1320, 4, false};
     App::deltaTime = 0.0f;
-    canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
+    canvas.client->snapshot = WorldSnapshot{10, {local, peer}}; canvas.update();
     REQUIRE(headAt(938));
     peer.x = 1710;
-    canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
+    canvas.client->snapshot = WorldSnapshot{11, {local, peer}}; canvas.update();
     REQUIRE(headAt(938));
     REQUIRE_FALSE(headAt(998));
-    App::deltaTime = 0.05f;
+    App::deltaTime = 0.045f - static_cast<float>(worldStep) * 0.5f;
     canvas.update();
     REQUIRE(headAt(968));
-    canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
+    App::deltaTime = static_cast<float>(worldStep) * 0.5f + 0.0001f;
+    canvas.update();
     REQUIRE_FALSE(headAt(938));
     REQUIRE(headAt(998));
     App::deltaTime = 0.0f;
-    canvas.client->snapshot = std::vector<WorldPlayer>{local}; canvas.update();
+    canvas.client->snapshot = WorldSnapshot{12, {local}}; canvas.update();
     REQUIRE_FALSE(headAt(998));
+    const auto originalTransform = [&] {
+        const SDL_Rect area{40, 100, 120, 240};
+        std::vector<Uint32> pixels(area.w * area.h);
+        App::sceneManager->render(canvas.app);
+        REQUIRE(SDL_RenderReadPixels(App::renderer, &area, SDL_PIXELFORMAT_RGBA32, pixels.data(),
+                                    area.w * sizeof(Uint32)) == 0);
+        return pixels;
+    };
+    auto* keys = const_cast<Uint8*>(SDL_GetKeyboardState(nullptr));
+    const auto setRight = [keys, &canvas](bool down) {
+        keys[SDL_SCANCODE_D] = down;
+        App::deltaTime = movementStep;
+        canvas.update();
+        keys[SDL_SCANCODE_D] = 0;
+    };
+    const auto initial = originalTransform();
+    setRight(true);
+    setRight(true);
+    REQUIRE(canvas.client->movementInputs == std::vector<std::array<std::int64_t, 3>>{{1, 1, 0}, {2, 1, 0}});
+    const auto predicted = originalTransform();
+    REQUIRE(predicted != initial);
+    auto confirmed = local;
+    confirmed.x += 160 * movementStep;
+    confirmed.facing = 2;
+    confirmed.inputAck = 1;
+    canvas.client->snapshot = WorldSnapshot{13, {confirmed}};
+    setRight(false);
+    REQUIRE(canvas.client->movementInputs.back() == std::array<std::int64_t, 3>{3, 0, 0});
+    REQUIRE(originalTransform() == predicted);
+    setRight(false);
+    REQUIRE(canvas.client->movementInputs.size() == 3);
+    REQUIRE(originalTransform() == predicted);
     SDL_Event enter{}; enter.type = SDL_KEYDOWN; enter.key.keysym.sym = SDLK_RETURN;
     App::sceneManager->handleEvents(canvas.app, enter);
     SDL_Event text{}; text.type = SDL_TEXTINPUT; std::strcpy(text.text.text, "Hello");

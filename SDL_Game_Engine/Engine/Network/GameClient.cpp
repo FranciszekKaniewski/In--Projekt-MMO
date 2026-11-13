@@ -101,8 +101,6 @@ ServerReply decode(const Json& message, const Command& command) {
         character.experience = integer(row.at("experience"), 0);
         reply.type = request == "enter_world" ? ServerReply::Type::WorldJoined : ServerReply::Type::CharacterSelected;
         reply.character = std::move(character);
-    } else if(request == "move_input" && type == "move_ok") {
-        reply.type = ServerReply::Type::Move;
     } else if(request == "leave_world" && type == "world_left") {
         reply.type = ServerReply::Type::WorldLeft;
     } else throw NetworkError("invalid_response");
@@ -122,7 +120,8 @@ class AsyncGameClient final : public GameClient {
     bool authenticated = false;
     std::optional<CharacterState> selected;
     bool inWorld = false;
-    std::optional<std::vector<WorldPlayer>> worldSnapshot;
+    std::deque<WorldSnapshot> worldSnapshots;
+    std::int64_t latestWorldTick = 0;
     TlsConnection connection;
     std::thread worker;
 
@@ -132,16 +131,32 @@ class AsyncGameClient final : public GameClient {
         const auto& rows = message.at("players");
         if(!selected || message.at("map_key") != selected->mapKey || !rows.is_array() ||
            rows.empty() || rows.size() > 10) throw NetworkError("invalid_response");
-        std::vector<WorldPlayer> players;
+        WorldSnapshot snapshot;
+        snapshot.tick = integer(message.at("tick"));
+        if(snapshot.tick <= latestWorldTick) return;
         std::unordered_set<std::int64_t> ids;
         for(const auto& row : rows) {
             auto player = decodePlayer(row);
             if(!ids.insert(player.id).second) throw NetworkError("invalid_response");
             player.moving = row.at("moving").get<bool>();
-            players.push_back(std::move(player));
+            player.vx = row.at("vx").get<float>();
+            player.vy = row.at("vy").get<float>();
+            if(!std::isfinite(player.vx) || !std::isfinite(player.vy)) throw NetworkError("invalid_response");
+            player.inputAck = integer(row.at("input_ack"), 0);
+            snapshot.players.push_back(std::move(player));
         }
         if(!ids.count(selected->id)) throw NetworkError("invalid_response");
-        worldSnapshot = std::move(players);
+        latestWorldTick = snapshot.tick;
+        if(worldSnapshots.size() == 8) worldSnapshots.pop_front();
+        worldSnapshots.push_back(std::move(snapshot));
+    }
+
+    bool handleWorldEvent(const Json& message) {
+        const auto type = message.value("type", "");
+        if(type == "move_error") throw NetworkError(text(message.at("code"), 64));
+        if(type != "world_state") return false;
+        postWorld(message);
+        return true;
     }
 
     ServerReply receiveReply(const Command& command, std::chrono::milliseconds timeout) {
@@ -153,8 +168,7 @@ class AsyncGameClient final : public GameClient {
             const auto frame = connection.receiveFrame(remaining);
             if(!frame) throw NetworkError("connection_timeout");
             header = Json::parse(*frame);
-            if(header.at("type") == "world_state") postWorld(header);
-        } while(header.at("type") == "world_state");
+        } while(handleWorldEvent(header));
         if(command.body.at("type") != "get_map" || header.at("type") == "error")
             return decode(header, command);
 
@@ -201,7 +215,9 @@ class AsyncGameClient final : public GameClient {
             selected = reply.character;
             inWorld = true;
         }
-        if(reply.type == ServerReply::Type::WorldLeft) { inWorld = false; worldSnapshot.reset(); }
+        if(reply.type == ServerReply::Type::WorldLeft) {
+            inWorld = false; worldSnapshots.clear(); latestWorldTick = 0;
+        }
         if(replies.size() >= 64) replies.pop_front();
         replies.push_back(std::move(reply));
     }
@@ -209,7 +225,8 @@ class AsyncGameClient final : public GameClient {
     void clearSession(std::uint64_t version) {
         std::lock_guard<std::mutex> lock(mutex);
         if(version == generation.load()) {
-            authenticated = false; selected.reset(); inWorld = false; worldSnapshot.reset();
+            authenticated = false; selected.reset(); inWorld = false;
+            worldSnapshots.clear(); latestWorldTick = 0;
         }
     }
 
@@ -250,6 +267,7 @@ class AsyncGameClient final : public GameClient {
                     command->body.erase("password");
                     connection.sendFrame(body, timeout);
                     std::fill(body.begin(), body.end(), '\0');
+                    if(command->id == 0) continue; // Movement is acknowledged in world_state.
                     auto reply = receiveReply(*command, timeout);
                     if(reply.type == ServerReply::Type::Error && (loginRequest || sessionLost(reply.error))) {
                         connection.close(); connected = false; clearSession(activeGeneration);
@@ -259,7 +277,7 @@ class AsyncGameClient final : public GameClient {
                     const auto frame = connection.receiveFrame(idleWait);
                     if(!frame) continue;
                     const auto message = Json::parse(*frame);
-                    if(message.value("type", "") == "world_state") { postWorld(message); continue; }
+                    if(handleWorldEvent(message)) continue;
                     if(message.value("type", "") == "pong") continue;
                     if(message.value("type", "") != "error") throw NetworkError("invalid_response");
                     ServerReply failure;
@@ -303,13 +321,20 @@ public:
     }
     RequestId downloadMap() override { return enqueue({{"type", "get_map"}}); }
     RequestId enterWorld() override { return enqueue({{"type", "enter_world"}}); }
-    RequestId moveInput(int dx, int dy) override {
-        return enqueue({{"type", "move_input"}, {"dx", dx}, {"dy", dy}});
+    bool moveInput(std::int64_t sequence, int dx, int dy) override {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(!inWorld || commands.size() >= 15) return false;
+        commands.push_back({0, generation.load(), {{"type", "move_input"}, {"seq", sequence}, {"dx", dx}, {"dy", dy}}});
+        wake.notify_one();
+        return true;
     }
     RequestId leaveWorld() override { return enqueue({{"type", "leave_world"}}); }
-    std::optional<std::vector<WorldPlayer>> pollWorld() override {
+    std::optional<WorldSnapshot> pollWorld() override {
         std::lock_guard<std::mutex> lock(mutex);
-        return std::exchange(worldSnapshot, std::nullopt);
+        if(worldSnapshots.empty()) return std::nullopt;
+        auto snapshot = std::move(worldSnapshots.front());
+        worldSnapshots.pop_front();
+        return snapshot;
     }
     std::optional<ServerReply> poll() override {
         std::lock_guard<std::mutex> lock(mutex);
@@ -326,7 +351,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex);
             ++generation; commands.clear(); replies.clear(); authenticated = false; selected.reset();
-            inWorld = false; worldSnapshot.reset();
+            inWorld = false; worldSnapshots.clear(); latestWorldTick = 0;
         }
         connection.interrupt(); wake.notify_all();
     }
