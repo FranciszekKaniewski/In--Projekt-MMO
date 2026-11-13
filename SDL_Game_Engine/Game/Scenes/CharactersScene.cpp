@@ -68,19 +68,22 @@ class CharactersScene : public UIScene {
         delete uiLayer;
         uiLayer = new UILayer(app);
         rows.clear();
-        auto* panel = uiLayer->addBox({-1,-1,800,560}, {20,22,30,230}, 24, "", false, "assets/UI/WindowBG2.png");
-        Font titleFont("assets/fonts/Lato-Bold.ttf", 40, {45,37,34,255});
+        constexpr int panelWidth = 900, panelHeight = 640;
+        constexpr int contentX = 100, contentWidth = panelWidth - contentX * 2;
+        // Leave room for the frame's ornaments and the buttons' hover animation.
+        auto* panel = uiLayer->addBox({-1,-1,panelWidth,panelHeight}, {20,22,30,230}, 24, "", false, "assets/UI/WindowBG2.png");
+        Font titleFont("assets/fonts/Lato-Bold.ttf", 36, {45,37,34,255});
         Font font("assets/fonts/Lato-Regular.ttf", 22, {255,255,255,255});
         Font inkFont("assets/fonts/Lato-Regular.ttf", 22, {65,53,49,255});
         Font buttonFont("assets/fonts/Lato-Bold.ttf", 24, {255,255,255,255});
         Font messageFont("assets/fonts/Lato-Regular.ttf", 18, {130,35,30,255});
-        panel->addLabel(titleFont, u8"Wybierz postać", {0,0,0,0}, {40,16,720,52});
-        panel->addLabel(inkFont, u8"Postacie przypisane do Twojego konta", {0,0,0,0}, {40,68,720,30});
+        panel->addLabel(titleFont, u8"Wybierz postać", {0,0,0,0}, {contentX,64,contentWidth,44});
+        panel->addLabel(inkFont, u8"Postacie przypisane do Twojego konta", {0,0,0,0}, {contentX,110,contentWidth,28});
         for(std::size_t i = 0; i < characters.size(); ++i) {
             const auto& character = characters[i];
             auto* row = panel->addButton(font, (character.id == selectedId ? "> " : "") + character.name,
                 character.id == selectedId ? SDL_Color{50,84,130,255} : SDL_Color{45,50,62,225},
-                {60,110 + static_cast<int>(i) * 30,680,28}, 1.01f,
+                {contentX,150 + static_cast<int>(i) * 30,contentWidth,28}, 1.01f,
                 [this, id = character.id]() { choose(id); });
             row->margin = 6;
             row->bgCornerRadius = 8;
@@ -88,20 +91,21 @@ class CharactersScene : public UIScene {
         }
         if(characters.empty()) panel->addLabel(inkFont,
             !loaded ? u8"Oczekiwanie na listę postaci..." : u8"Na tym koncie nie ma jeszcze postaci.",
-            {0,0,0,0}, {40,210,720,60});
+            {0,0,0,0}, {contentX,260,contentWidth,64});
 
-        previous = panel->addButton(buttonFont, u8"Poprzednia", {0,0,0,0}, {60,420,170,36}, 1.03f,
+        previous = panel->addButton(buttonFont, u8"Poprzednia", {0,0,0,0}, {contentX,466,150,34}, 1.02f,
             [this, &app]() { if(page) loadPage(app, page - 1, cursors[page - 1]); }, "assets/UI/btn.png");
-        panel->addLabel(inkFont, u8"Strona " + std::to_string(page + 1), {0,0,0,0}, {245,420,140,36});
-        next = panel->addButton(buttonFont, u8"Następna", {0,0,0,0}, {400,420,160,36}, 1.03f,
+        panel->addLabel(inkFont, u8"Strona " + std::to_string(page + 1), {0,0,0,0}, {266,466,140,34});
+        next = panel->addButton(buttonFont, u8"Następna", {0,0,0,0}, {422,466,150,34}, 1.02f,
             [this, &app]() { if(hasMore && !characters.empty()) loadPage(app, page + 1, characters.back().id); }, "assets/UI/btn.png");
-        refresh = panel->addButton(buttonFont, u8"Odśwież", {0,0,0,0}, {580,420,160,36}, 1.03f,
+        refresh = panel->addButton(buttonFont, u8"Odśwież", {0,0,0,0}, {588,466,212,34}, 1.02f,
             [this, &app]() { loadPage(app, page, cursors[page]); }, "assets/UI/btn.png");
-        status = panel->addLabel(messageFont, message, {0,0,0,0}, {30,464,740,28});
-        panel->addButton(buttonFont, u8"Wyloguj", {0,0,0,0}, {60,502,200,44}, 1.05f,
+        status = panel->addLabel(messageFont, message, {0,0,0,0}, {contentX,505,contentWidth,22});
+        auto* logout = panel->addButton(buttonFont, u8"Wyloguj", {0,0,0,0}, {contentX,537,220,40}, 1.03f,
             [this, &app]() { back(app); }, "assets/UI/btn.png");
-        play = panel->addButton(buttonFont, "Play", {0,0,0,0}, {540,502,200,44}, 1.05f,
+        play = panel->addButton(buttonFont, "Play", {0,0,0,0}, {580,537,220,40}, 1.03f,
             [this, &app]() { enter(app); }, "assets/UI/btn.png");
+        for(auto* button : {previous, next, refresh, logout, play}) button->margin = 8;
         updateControls();
     }
 
