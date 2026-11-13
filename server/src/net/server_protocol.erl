@@ -44,8 +44,12 @@ dispatch(Type, _, State) when Type =:= <<"register">>; Type =:= <<"login">> ->
     {error_message(already_authenticated), State};
 dispatch(Type, _, #{user := undefined} = State)
   when Type =:= <<"list_characters">>; Type =:= <<"select_character">>;
-       Type =:= <<"get_map">>; Type =:= <<"logout">> ->
+       Type =:= <<"get_map">>; Type =:= <<"logout">>; Type =:= <<"enter_world">>;
+       Type =:= <<"move_input">>; Type =:= <<"leave_world">> ->
     {error_message(authentication_required), State};
+dispatch(Type, _, #{world_ref := _} = State)
+  when Type =:= <<"select_character">>; Type =:= <<"get_map">>; Type =:= <<"enter_world">> ->
+    {error_message(already_in_world), State};
 dispatch(<<"list_characters">>, Message, #{user := #{id := UserId}} = State) ->
     After = maps:get(<<"after_id">>, Message, 0),
     case valid_id(After, 0) of
@@ -63,22 +67,46 @@ dispatch(<<"select_character">>, Message, #{user := #{id := UserId}} = State) ->
     case valid_id(Id, 1) of
         true ->
             case server_characters:find_owned(UserId, Id) of
-                {ok, #{map_key := MapKey} = Character} ->
+                {ok, Character} ->
                     {#{<<"type">> => <<"character_selected">>, <<"character">> => Character},
-                     State#{character_id => Id, map_key => MapKey}};
+                     maps:remove(map_bounds, State#{character_id => Id, character => Character})};
                 {error, Code} -> {error_message(Code), State}
             end;
         false -> {error_message(invalid_message), State}
     end;
-dispatch(<<"get_map">>, _, #{map_key := MapKey} = State) ->
+dispatch(<<"get_map">>, _, #{character := #{map_key := MapKey}} = State) ->
     case server_maps:read(MapKey) of
         {ok, Bytes} ->
-            Header = #{<<"type">> => <<"map_data">>, <<"map_key">> => MapKey,
-                       <<"size">> => byte_size(Bytes)},
-            {{map_data, Header, Bytes}, State};
+            case server_maps:bounds(Bytes) of
+                {ok, Bounds} ->
+                    Header = #{<<"type">> => <<"map_data">>, <<"map_key">> => MapKey,
+                               <<"size">> => byte_size(Bytes)},
+                    {{map_data, Header, Bytes}, State#{map_bounds => Bounds}};
+                {error, Code} -> {error_message(Code), State}
+            end;
         {error, Code} -> {error_message(Code), State}
     end;
 dispatch(<<"get_map">>, _, State) -> {error_message(character_required), State};
+dispatch(<<"enter_world">>, _, #{character := Character, map_bounds := Bounds} = State) ->
+    case server_world:enter(Character, Bounds) of
+        {ok, Ref, Spawn} ->
+            {#{type => <<"world_joined">>, character => Spawn}, State#{world_ref => Ref}};
+        {error, Code} -> {error_message(Code), State}
+    end;
+dispatch(<<"enter_world">>, _, State) -> {error_message(map_required), State};
+dispatch(<<"move_input">>, Message, #{world_ref := _} = State) ->
+    case Message of
+        #{<<"dx">> := X, <<"dy">> := Y} when is_integer(X), X >= -1, X =< 1,
+                                            is_integer(Y), Y >= -1, Y =< 1 ->
+            case server_world:move(X, Y) of
+                ok -> {#{type => <<"move_ok">>}, State};
+                {error, Code} -> {error_message(Code), State}
+            end;
+        _ -> {error_message(invalid_message), State}
+    end;
+dispatch(<<"move_input">>, _, State) -> {error_message(world_required), State};
+dispatch(<<"leave_world">>, _, State) ->
+    {#{type => <<"world_left">>}, leave_world(State)};
 dispatch(<<"logout">>, _, State) ->
     {#{<<"type">> => <<"logout_ok">>}, clear_session(State)};
 dispatch(_, _, State) -> {error_message(unknown_message_type), State}.
@@ -87,7 +115,14 @@ valid_id(Value, Minimum) ->
     is_integer(Value) andalso Value >= Minimum andalso Value =< 9223372036854775807.
 
 clear_session(State) ->
-    maps:remove(map_key, State#{user => undefined, character_id => undefined, session_deadline => undefined}).
+    Left = leave_world(State),
+    maps:without([character, map_bounds],
+                 Left#{user => undefined, character_id => undefined, session_deadline => undefined}).
+
+leave_world(#{world_ref := _} = State) ->
+    ok = server_world:leave(),
+    maps:remove(world_ref, State);
+leave_world(State) -> State.
 
 decode(Data) ->
     try json:decode(Data) of Message -> {ok, Message}

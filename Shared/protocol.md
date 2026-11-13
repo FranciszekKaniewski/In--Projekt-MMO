@@ -27,6 +27,9 @@ Nieznane dodatkowe pola są ignorowane; pole `user_id` klienta nie określa kont
 | `list_characters` | Zalogowane konto | `characters` |
 | `select_character` | Zalogowane konto, własna postać | `character_selected` |
 | `get_map` | Zalogowane konto, wybrana postać | `map_data` i ramki z plikiem TMJ |
+| `enter_world` | Zalogowane konto, pobrana mapa postaci | `world_joined` |
+| `move_input` | Postać w świecie | `move_ok` |
+| `leave_world` | Zalogowane konto | `world_left` |
 | `logout` | Zalogowane konto | `logout_ok` |
 
 ```json
@@ -61,8 +64,8 @@ Przy `has_more: true` przekaż `after_id` równy ostatniemu otrzymanemu ID.
 {"type":"list_characters","after_id":12}
 ```
 
-Wybór postaci sprawdza w bazie jej właściciela i zapamiętuje ID w sesji.
-Nie uruchamia jeszcze symulacji świata ani nie zapisuje pozycji.
+Wybór postaci sprawdza w bazie jej właściciela i zapamiętuje dane postaci w sesji.
+Symulacja zaczyna się po `enter_world`.
 
 ```json
 {"type":"select_character","character_id":12}
@@ -90,6 +93,35 @@ czterobajtowy nagłówek długości. Po zebraniu `size` bajtów połączenie wra
 do zwykłych wiadomości JSON. Klient składa mapę z pobranego TMJ i lokalnego
 atlasu `Assets/Graphics/TileSet_001.png`.
 
+## Ruch i obecność w świecie
+
+Po załadowaniu TMJ klient wysyła `{"type":"enter_world"}`. `world_joined`
+zawiera obiekt `character` o tym samym formacie co `character_selected`,
+z pozycją startową ograniczoną do granic mapy. Jedna postać może mieć
+jedno aktywne wejście. Na jednej mapie może być do 10 postaci.
+
+```json
+{"type":"move_input","dx":1,"dy":0}
+{"type":"move_ok"}
+{"type":"world_state","map_key":"map_expanded","players":[{"id":12,"name":"Rycerz","position_x":1358.0,"position_y":1320.0,"facing":2,"moving":true}]}
+{"type":"move_input","dx":0,"dy":0}
+{"type":"leave_world"}
+{"type":"world_left"}
+```
+
+`dx` i `dy` przyjmują liczby całkowite od -1 do 1. Osie rosną w prawo
+i w dół. Serwer wiąże kierunek z postacią zalogowanego połączenia,
+normalizuje ruch po skosie i liczy pozycję co 50 ms przy prędkości
+160 jednostek na sekundę. Klient odświeża aktywny kierunek co 250 ms,
+a serwer zeruje wejście po sekundzie bez odświeżenia.
+
+`world_state` jest zdarzeniem wysyłanym co 100 ms niezależnie od odpowiedzi
+na żądania. Zawiera pełną listę aktywnych postaci na bieżącej mapie, w tym
+własną postać. Klient rysuje najnowszy odebrany stan i usuwa encje, których
+brakuje w kolejnej liście. Wyjście, wylogowanie, wygaśnięcie sesji i zamknięcie
+połączenia usuwają postać ze świata. Ruch jest przechowywany w pamięci,
+więc po ponownym wyborze postać startuje z pozycji zapisanej w PostgreSQL.
+
 ## Błędy
 
 ```json
@@ -110,6 +142,11 @@ atlasu `Assets/Graphics/TileSet_001.png`.
 | `character_required` | Przed pobraniem mapy trzeba wybrać postać |
 | `map_not_found` | Serwer nie obsługuje klucza mapy zapisanej dla postaci |
 | `map_unavailable` | Serwer nie może odczytać pliku TMJ lub plik ma nieprawidłowy rozmiar |
+| `map_required` | Przed wejściem do świata trzeba pobrać mapę wybranej postaci |
+| `world_required` | Ruch wymaga wejścia do świata |
+| `already_in_world` | Połączenie jest już w świecie gry |
+| `character_in_world` | Wybrana postać jest aktywna w innym połączeniu |
+| `world_full` | Mapa osiągnęła limit aktywnych postaci |
 | `session_expired` | Sesja wygasła; konto i wybór postaci zostały usunięte z sesji |
 | `rate_limited` | Przekroczony limit prób; zaczekaj na koniec okna limitu |
 | `server_busy` | Brak wolnego miejsca na operację uwierzytelnienia; spróbuj później |

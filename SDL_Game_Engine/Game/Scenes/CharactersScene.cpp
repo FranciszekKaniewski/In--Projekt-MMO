@@ -11,8 +11,9 @@ class CharactersScene : public UIScene {
     std::size_t page = 0, requestedPage = 0;
     std::int64_t requestedCursor = 0;
     RequestId pending = 0;
-    enum class Operation { List, Select, Download };
+    enum class Operation { List, Select, Download, Join };
     Operation operation = Operation::List;
+    Map loadedMap;
     bool hasMore = false, enteringGame = false, loaded = false;
     Label* status = nullptr;
     Button* play = nullptr;
@@ -131,6 +132,7 @@ public:
             if(reply->request != pending && reply->request != 0) continue;
             if(reply->type == ServerReply::Type::Error) {
                 pending = 0;
+                loadedMap.clear();
                 if(!app.serverClient->isAuthenticated()) {
                     app.loginMessage = serverErrorText(reply->error);
                     App::sceneManager->changeScene(createScene1, app);
@@ -150,16 +152,21 @@ public:
                 continue;
             }
             if(operation == Operation::Download && reply->type == ServerReply::Type::MapData) {
-                const auto character = app.gameClient().selectedCharacter();
-                Map map;
-                if(!character || !map.loadTilemap(reply->mapData, "Assets/Graphics/TileSet_001.png")) {
-                    std::cerr << map.error() << std::endl;
+                if(!loadedMap.loadTilemap(reply->mapData, "Assets/Graphics/TileSet_001.png")) {
+                    std::cerr << loadedMap.error() << std::endl;
                     setMessage(u8"Nie udało się wczytać mapy z serwera.");
                     updateControls();
                     continue;
                 }
+                operation = Operation::Join;
+                pending = app.gameClient().enterWorld();
+                setMessage(u8"Wchodzenie do świata gry...");
+                updateControls();
+                continue;
+            }
+            if(operation == Operation::Join && reply->type == ServerReply::Type::WorldJoined && reply->character) {
                 enteringGame = true;
-                App::sceneManager->changeScene([map = std::move(map), character = *character]() mutable {
+                App::sceneManager->changeScene([map = std::move(loadedMap), character = std::move(*reply->character)]() mutable {
                     return createNetworkGameScene(std::move(map), std::move(character));
                 }, app);
                 return;

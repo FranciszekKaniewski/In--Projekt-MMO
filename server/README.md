@@ -76,7 +76,8 @@ Lista i wybór postaci korzystają z tego `user_id`, a nie z pola klienta.
 Wybór cudzej i nieistniejącej postaci daje ten sam `character_not_found`.
 Wylogowanie i wygaśnięcie usuwają konto oraz wybór postaci z sesji.
 Rozłączenie lub restart serwera wymaga ponownego logowania.
-Wybór postaci na tym etapie nie uruchamia jeszcze symulacji świata.
+Po pobraniu mapy `enter_world` dodaje postać do symulacji. Serwer oblicza
+ruch i rozsyła pozycje wszystkim aktywnym postaciom na tej samej mapie.
 
 `config/sys.config` ustala: 60 s na logowanie, 8 h ważności sesji,
 5 prób logowania/min/konto, 30/min/IP i 5 rejestracji/h/IP.
@@ -126,15 +127,15 @@ uruchomienie, nadzór i konfigurację. Moduły zachowują prefiks `server_`.
 | `auth/` | Rejestracja, logowanie, hasła, limity prób i zapytania do tabeli kont |
 | `characters/` | Lista postaci i odczyt postaci należącej do zalogowanego konta |
 | `db/` | Utrzymywanie połączenia z PostgreSQL i wykonywanie zapytań |
-| `world/` | Udostępnianie plików TMJ według klucza mapy |
+| `world/` | Udostępnianie TMJ, stan aktywnych postaci i symulacja ruchu |
 
 `server_protocol` przekazuje operacje do `server_auth` lub `server_characters`.
 Moduły `server_accounts` i `server_characters` wykonują zapytania przez `server_db`.
 Własność postaci jest sprawdzana z użyciem identyfikatora konta z sesji połączenia.
 
-Przy dodawaniu wspólnej mapy moduły w `world/` będą odpowiadały za aktywne
-postacie i symulację ruchu w pamięci. Trwałe dane postaci pozostaną
-odpowiedzialnością `characters/`.
+`server_world` liczy ruch na podstawie kierunku z klienta, używa granic
+z udostępnionego TMJ i monitoruje procesy połączeń. Trwałe dane postaci
+odczytuje `server_characters`.
 
 ## Moduł, proces i gen_server
 

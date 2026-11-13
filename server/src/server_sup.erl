@@ -29,6 +29,8 @@ init([]) ->
           start => {server_db, start_link, []}},
         #{id => server_auth_guard,
           start => {server_auth_guard, start_link, []}},
+        #{id => server_world,
+          start => {server_world, start_link, []}},
         #{id => server_connection_sup,
           start => {server_connection_sup, start_link, []},
           type => supervisor},

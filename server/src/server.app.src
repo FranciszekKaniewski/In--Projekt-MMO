@@ -1,7 +1,7 @@
 {application, server, [
     {description, "SDL game TLS server with account authentication"},
     {vsn, "0.1.0"},
-    {registered, [server_sup, server_db, server_auth_guard,
+    {registered, [server_sup, server_db, server_auth_guard, server_world,
                   server_connection_sup, server_listener]},
     {mod, {server_app, []}},
     {applications, [

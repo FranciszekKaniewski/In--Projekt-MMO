@@ -25,10 +25,16 @@ struct CharacterState : CharacterSummary {
     std::int64_t level = 1, experience = 0;
 };
 
+struct WorldPlayer : CharacterSummary {
+    float x = 0, y = 0;
+    int facing = 4;
+    bool moving = false;
+};
+
 using RequestId = std::uint64_t;
 
 struct ServerReply {
-    enum class Type { Login, Characters, CharacterSelected, MapData, Error };
+    enum class Type { Login, Characters, CharacterSelected, MapData, WorldJoined, Move, WorldLeft, Error };
     RequestId request = 0; // Zero denotes an unsolicited connection/session event.
     Type type = Type::Error;
     std::string error;
@@ -47,6 +53,10 @@ public:
     virtual RequestId listCharacters(std::int64_t afterId = 0) = 0;
     virtual RequestId selectCharacter(std::int64_t id) = 0;
     virtual RequestId downloadMap() = 0;
+    virtual RequestId enterWorld() = 0;
+    virtual RequestId moveInput(int dx, int dy) = 0;
+    virtual RequestId leaveWorld() = 0;
+    virtual std::optional<std::vector<WorldPlayer>> pollWorld() = 0;
     virtual std::optional<ServerReply> poll() = 0;
     virtual bool isAuthenticated() const = 0;
     virtual std::optional<CharacterState> selectedCharacter() const = 0;

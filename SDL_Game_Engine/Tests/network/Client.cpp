@@ -80,6 +80,22 @@ int wmain(int argc, wchar_t** argv) {
                 require(expired.error == "session_expired" && !client->isAuthenticated(), "Expiration did not revoke the session");
                 require(!client->selectedCharacter(), "Expiration retained a selected character");
             }
+            if(mode == "world") {
+                const auto joined = await(*client, client->enterWorld());
+                require(joined.type == ServerReply::Type::WorldJoined && joined.character->x == 1352,
+                        "Server spawn was not applied");
+                require(await(*client, client->moveInput(1, 0)).type == ServerReply::Type::Move,
+                        "World event interrupted the movement response");
+                const auto state = client->pollWorld();
+                require(state && state->size() == 2 && state->front().id == 9007199254741009LL &&
+                        state->front().x == 1368 && state->front().moving && state->back().name == "Peer",
+                        "The latest world snapshot was not delivered");
+                require(await(*client, client->leaveWorld()).type == ServerReply::Type::WorldLeft,
+                        "Leave world failed");
+                require(!client->pollWorld() && client->isAuthenticated(), "Leaving retained stale world state");
+                require(await(*client, client->listCharacters()).type == ServerReply::Type::Characters,
+                        "The TLS session did not survive leaving the world");
+            }
         }
         client->disconnect();
         require(!client->isAuthenticated() && !client->selectedCharacter(), "Disconnect retained session state");

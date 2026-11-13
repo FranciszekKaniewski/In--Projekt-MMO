@@ -42,6 +42,11 @@ handle_info({ssl, Socket, Data}, #{socket := Socket, ready := true} = State) ->
     end;
 handle_info({ssl_closed, Socket}, #{socket := Socket} = State) -> {stop, normal, State};
 handle_info({ssl_error, Socket, _}, #{socket := Socket} = State) -> {stop, normal, State};
+handle_info({world_state, Ref, Frame}, #{world_ref := Ref, socket := Socket} = State) ->
+    case ssl:send(Socket, Frame) of
+        ok -> server_world:delivered(Ref), {noreply, State};
+        {error, _} -> {stop, normal, State}
+    end;
 handle_info({timeout, Timer, session}, #{timer := Timer, socket := Socket} = State) ->
     case ssl:send(Socket, json:encode(server_protocol:error_message(session_expired))) of
         ok -> {noreply, start_timer(authentication, server_protocol:clear_session(State))};

@@ -5,6 +5,7 @@
 #include "../../Engine/Scenes/GameScene.h"
 #include "../support/GameSceneFixture.h"
 #include <SDL_image.h>
+#include <array>
 #include <deque>
 #include <cstring>
 #include <fstream>
@@ -16,17 +17,23 @@ public:
     bool authenticated = false;
     int disconnects = 0, logins = 0;
     int mapDownloads = 0;
+    int worldEntries = 0, worldLeaves = 0;
     RequestId current = 0;
     std::string username, password;
     std::vector<std::int64_t> cursors, selections;
     std::deque<ServerReply> replies;
     std::optional<CharacterState> selected;
+    std::optional<std::vector<WorldPlayer>> snapshot;
     RequestId login(std::string name, std::string secret) override {
         ++logins; username = std::move(name); password = std::move(secret); return ++current;
     }
     RequestId listCharacters(std::int64_t cursor) override { cursors.push_back(cursor); return ++current; }
     RequestId selectCharacter(std::int64_t id) override { selections.push_back(id); return ++current; }
     RequestId downloadMap() override { ++mapDownloads; return ++current; }
+    RequestId enterWorld() override { ++worldEntries; return ++current; }
+    RequestId moveInput(int, int) override { return ++current; }
+    RequestId leaveWorld() override { ++worldLeaves; return ++current; }
+    std::optional<std::vector<WorldPlayer>> pollWorld() override { return std::exchange(snapshot, std::nullopt); }
     std::optional<ServerReply> poll() override {
         if(replies.empty()) return std::nullopt;
         auto reply = std::move(replies.front()); replies.pop_front(); return reply;
@@ -181,15 +188,45 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     downloaded.request = canvas.client->current;
     downloaded.mapData.assign(std::istreambuf_iterator<char>(input), {});
     canvas.client->replies.push_back(std::move(downloaded)); canvas.update();
+    REQUIRE(canvas.client->worldEntries == 1);
+    REQUIRE_FALSE(dynamic_cast<GameScene*>(App::sceneManager->activeScene));
+    ServerReply joined;
+    joined.request = canvas.client->current;
+    joined.type = ServerReply::Type::WorldJoined;
+    joined.character = state;
+    canvas.client->replies.push_back(std::move(joined)); canvas.update();
     auto* game = dynamic_cast<GameScene*>(App::sceneManager->activeScene);
     REQUIRE(game);
     REQUIRE(canvas.client->isAuthenticated());
+    const auto headAt = [&](int x) {
+        App::sceneManager->render(canvas.app);
+        const SDL_Rect area{x, 314, 1, 1};
+        std::array<Uint8, 4> pixel{};
+        REQUIRE(SDL_RenderReadPixels(App::renderer, &area, SDL_PIXELFORMAT_RGBA32, pixel.data(), 4) == 0);
+        return pixel == std::array<Uint8, 4>{95, 205, 228, 255};
+    };
+    const WorldPlayer local{{state.id, state.name}, 1350, 1320, 4, false};
+    WorldPlayer peer{{42, "Peer"}, 1650, 1320, 4, false};
+    App::deltaTime = 0.0f;
+    canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
+    REQUIRE(headAt(938));
+    peer.x = 1710;
+    canvas.client->snapshot = std::vector<WorldPlayer>{local, peer}; canvas.update();
+    REQUIRE_FALSE(headAt(938));
+    REQUIRE(headAt(998));
+    canvas.client->snapshot = std::vector<WorldPlayer>{local}; canvas.update();
+    REQUIRE_FALSE(headAt(998));
     SDL_Event enter{}; enter.type = SDL_KEYDOWN; enter.key.keysym.sym = SDLK_RETURN;
     App::sceneManager->handleEvents(canvas.app, enter);
     SDL_Event text{}; text.type = SDL_TEXTINPUT; std::strcpy(text.text.text, "Hello");
     App::sceneManager->handleEvents(canvas.app, text);
     App::sceneManager->handleEvents(canvas.app, enter);
     REQUIRE(game->chatSession().messages().back().author == u8"Żółw");
+    SDL_Event escape{}; escape.type = SDL_KEYDOWN; escape.key.keysym.sym = SDLK_ESCAPE;
+    App::sceneManager->handleEvents(canvas.app, escape);
+    REQUIRE(canvas.client->worldLeaves == 1);
+    REQUIRE(canvas.client->isAuthenticated());
+    REQUIRE_FALSE(dynamic_cast<GameScene*>(App::sceneManager->activeScene));
 }
 
 TEST_CASE("Empty character list can be refreshed and logout clears the connection", "[integration][characters]") {

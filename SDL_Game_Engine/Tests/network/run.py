@@ -17,6 +17,8 @@ FIXTURES = ROOT.parent / "server/test/fixtures"
 CLIENT = ROOT / "build/tests/network/client.exe"
 CHARACTER_ID = 9007199254741009
 MAP = ROOT.parent / "server/priv/maps/Map_expanded.tmj"
+CHARACTER = {"id": CHARACTER_ID, "name": "Żółw", "map_key": "map_expanded",
+             "position_x": 1350, "position_y": 1320, "facing": 4, "level": 1, "experience": 0}
 
 
 def receive_exact(connection, count):
@@ -84,9 +86,7 @@ def run_case(mode, ca_file, tls_version):
                         send(connection, {"type": "characters", "characters": [{"id": CHARACTER_ID, "name": "Żółw"}], "has_more": False})
                     elif kind == "select_character":
                         assert message["character_id"] == CHARACTER_ID
-                        send(connection, {"type": "character_selected", "character": {
-                            "id": CHARACTER_ID, "name": "Żółw", "map_key": "map_expanded",
-                            "position_x": 1350, "position_y": 1320, "facing": 4, "level": 1, "experience": 0}})
+                        send(connection, {"type": "character_selected", "character": CHARACTER})
                         if mode == "expired":
                             time.sleep(0.1)
                             send(connection, {"type": "error", "code": "session_expired"})
@@ -104,6 +104,17 @@ def run_case(mode, ca_file, tls_version):
                             connection.sendall(struct.pack("!I", len(chunk)) + chunk)
                         if mode == "map_truncated":
                             return
+                    elif kind == "enter_world" and mode == "world":
+                        send(connection, {"type": "world_joined", "character": dict(CHARACTER, position_x=1352)})
+                    elif kind == "move_input" and mode == "world":
+                        assert message == {"type": "move_input", "dx": 1, "dy": 0}
+                        for x in (1360, 1368):
+                            send(connection, {"type": "world_state", "map_key": "map_expanded", "players": [
+                                dict(CHARACTER, position_x=x, facing=2, moving=True),
+                                dict(CHARACTER, id=CHARACTER_ID + 1, name="Peer", moving=False)]})
+                        send(connection, {"type": "move_ok"})
+                    elif kind == "leave_world" and mode == "world":
+                        send(connection, {"type": "world_left"})
                     else:
                         raise AssertionError("Unexpected request type")
         except (EOFError, ssl.SSLError, ConnectionError, TimeoutError):
@@ -159,13 +170,13 @@ def main():
         unicode_ca = Path(directory) / "Zażółć 🔐" / "zaufany-Żółw.crt"
         unicode_ca.parent.mkdir()
         unicode_ca.write_bytes((FIXTURES / "ca.crt").read_bytes())
-        for mode in ["tls12", "tls13", "unicode_path", "invalid_credentials", "hostname", "untrusted", "oversized", "expired", "cancel", "timeout", "missing_ca", "map", "map_wrong_key", "map_truncated"]:
+        for mode in ["tls12", "tls13", "unicode_path", "invalid_credentials", "hostname", "untrusted", "oversized", "expired", "cancel", "timeout", "missing_ca", "map", "map_wrong_key", "map_truncated", "world"]:
             ca = wrong_ca if mode == "untrusted" else Path(directory) / "missing.crt" if mode == "missing_ca" else FIXTURES / "ca.crt"
             if mode == "unicode_path":
                 ca = unicode_ca
             version = ssl.TLSVersion.TLSv1_2 if mode == "tls12" else ssl.TLSVersion.TLSv1_3
             run_case(mode, ca, version)
-    print("14 native TLS scenarios passed.")
+    print("15 native TLS scenarios passed.")
 
 
 if __name__ == "__main__":

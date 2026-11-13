@@ -10,6 +10,8 @@ auth_database_test_() ->
                      fun() -> lifecycle(Port) end}},
                   {"session expiration revokes access", fun() -> expiration(Port) end},
                   {"character lists are paginated and scoped to the account", fun() -> pages(Port) end},
+                  {"world simulates and broadcasts movement to both players", {timeout, 15,
+                     fun() -> world_movement(Port) end}},
                   {"database connection recovers after disconnect", fun() -> reconnect_db() end},
                   {"database failure never authenticates a connection", fun() -> database_failure(Port) end},
                   {"registration enforces password policy without locking out existing accounts",
@@ -112,6 +114,80 @@ receive_map(Socket, Size, Chunks) ->
     {ok, Chunk} = ssl:recv(Socket, 0, 5000),
     ?assertEqual(min(4096, Size), byte_size(Chunk)),
     receive_map(Socket, Size - byte_size(Chunk), [Chunk | Chunks]).
+
+world_movement(Port) ->
+    server_test_support:with_client(Port, fun(A) ->
+        Name = unique(<<"world">>),
+        AId = world_character(A, Name),
+        ?assertEqual(error_reply(map_required), request(A, <<"enter_world">>)),
+        ?assertEqual(error_reply(world_required), request(A, <<"move_input">>)),
+        check_map_download(A),
+        ?assertMatch(#{<<"type">> := <<"world_joined">>,
+                       <<"character">> := #{<<"position_x">> := 1350.0}}, request(A, <<"enter_world">>)),
+        server_test_support:with_client(Port, fun(B) ->
+            BId = world_character(B, unique(<<"world">>)),
+            check_map_download(B),
+            ?assertMatch(#{<<"type">> := <<"world_joined">>}, request(B, <<"enter_world">>)),
+            Pred = fun(Players) -> maps:is_key(AId, Players) andalso maps:is_key(BId, Players) end,
+            _ = await_world(A, Pred, 20),
+            _ = await_world(B, Pred, 20),
+            ?assertEqual(error_reply(invalid_message), world_request(A, #{type => <<"move_input">>, dx => 2, dy => 0})),
+            ?assertMatch(#{<<"type">> := <<"move_ok">>},
+                         world_request(A, #{type => <<"move_input">>, dx => 1, dy => 0, character_id => BId})),
+            Moving = fun(Players) ->
+                case maps:get(AId, Players, #{}) of
+                    #{<<"position_x">> := X, <<"position_y">> := 1320.0,
+                      <<"facing">> := 2, <<"moving">> := true} when X > 1350 -> true;
+                    _ -> false
+                end
+            end,
+            _ = await_world(A, Moving, 20),
+            Observed = await_world(B, Moving, 20),
+            ?assertMatch(#{<<"position_x">> := 1350.0, <<"moving">> := false}, maps:get(BId, Observed)),
+            ?assertMatch(#{<<"type">> := <<"move_ok">>}, world_request(A, #{type => <<"move_input">>, dx => 0, dy => 0})),
+            Stopped = fun(Players) ->
+                case maps:get(AId, Players, #{}) of
+                    #{<<"position_x">> := X, <<"moving">> := false} when X > 1350 -> true;
+                    _ -> false
+                end
+            end,
+            Stop1 = await_world(B, Stopped, 20),
+            Stop2 = await_world(B, Stopped, 20),
+            ?assertEqual(maps:get(AId, Stop1), maps:get(AId, Stop2)),
+            ?assertMatch(#{<<"type">> := <<"world_left">>}, world_request(B, #{type => <<"leave_world">>})),
+            _ = await_world(A, fun(Players) -> not maps:is_key(BId, Players) end, 20),
+            ?assertMatch(#{<<"type">> := <<"world_joined">>}, request(B, <<"enter_world">>)),
+            _ = await_world(A, Pred, 20)
+        end),
+        _ = await_world(A, fun(Players) -> map_size(Players) =:= 1 end, 20)
+    end).
+
+world_character(Socket, Name) ->
+    register_user(Socket, Name),
+    Id = create_character(maps:get(<<"user_id">>, login(Socket, Name))),
+    ?assertMatch(#{<<"type">> := <<"character_selected">>}, select(Socket, Id)),
+    Id.
+
+world_request(Socket, Message) ->
+    ok = ssl:send(Socket, json:encode(Message)),
+    await_reply(Socket, 20).
+
+await_reply(_, 0) -> error(no_reply);
+await_reply(Socket, Attempts) ->
+    case server_test_support:receive_message(Socket) of
+        #{<<"type">> := <<"world_state">>} -> await_reply(Socket, Attempts - 1);
+        Reply -> Reply
+    end.
+
+await_world(_, _, 0) -> error(no_matching_world_state);
+await_world(Socket, Match, Attempts) ->
+    #{<<"type">> := <<"world_state">>, <<"map_key">> := <<"map_expanded">>, <<"players">> := Rows} =
+        server_test_support:receive_message(Socket),
+    Players = maps:from_list([{maps:get(<<"id">>, Row), Row} || Row <- Rows]),
+    case Match(Players) of
+        true -> Players;
+        false -> await_world(Socket, Match, Attempts - 1)
+    end.
 
 expiration(Port) ->
     Username = unique(<<"expiry">>),
