@@ -108,6 +108,27 @@ Migracje kont i postaci opisuje [db/README.md](db/README.md).
 Tabela `public.characters` pozwala zapisać wiele postaci na konto oraz mapę,
 pozycję i kierunek zgodne z klientem SDL.
 
+## Architektura backendu
+
+Backend jest jedną aplikacją OTP. W `src/` pliki `server.app.src`,
+`server_app.erl`, `server_sup.erl` i `server_config.erl` odpowiadają za
+uruchomienie, nadzór i konfigurację. Moduły zachowują prefiks `server_`.
+
+| Katalog w `src/` | Odpowiedzialność |
+|---|---|
+| `net/` | Nasłuch TLS, procesy połączeń, sesje i kierowanie żądań JSON |
+| `auth/` | Rejestracja, logowanie, hasła, limity prób i zapytania do tabeli kont |
+| `characters/` | Lista postaci i odczyt postaci należącej do zalogowanego konta |
+| `db/` | Utrzymywanie połączenia z PostgreSQL i wykonywanie zapytań |
+
+`server_protocol` przekazuje operacje do `server_auth` lub `server_characters`.
+Moduły `server_accounts` i `server_characters` wykonują zapytania przez `server_db`.
+Własność postaci jest sprawdzana z użyciem identyfikatora konta z sesji połączenia.
+
+Przy dodawaniu wspólnej mapy moduły w `world/` będą odpowiadały za aktywne
+postacie i symulację ruchu w pamięci. Trwałe dane postaci pozostaną
+odpowiedzialnością `characters/`.
+
 ## Moduł, proces i gen_server
 
 Moduł to plik z funkcjami, np. `server_connection.erl`. Proces to uruchomiona,

@@ -50,7 +50,7 @@ dispatch(<<"list_characters">>, Message, #{user := #{id := UserId}} = State) ->
     After = maps:get(<<"after_id">>, Message, 0),
     case valid_id(After, 0) of
         true ->
-            case server_accounts:list_characters(UserId, After) of
+            case server_characters:list(UserId, After) of
                 {ok, Characters, More} ->
                     {#{<<"type">> => <<"characters">>, <<"characters">> => Characters,
                        <<"has_more">> => More}, State};
@@ -62,7 +62,7 @@ dispatch(<<"select_character">>, Message, #{user := #{id := UserId}} = State) ->
     Id = maps:get(<<"character_id">>, Message, undefined),
     case valid_id(Id, 1) of
         true ->
-            case server_accounts:select_character(UserId, Id) of
+            case server_characters:find_owned(UserId, Id) of
                 {ok, Character} ->
                     {#{<<"type">> => <<"character_selected">>, <<"character">> => Character},
                      State#{character_id => Id}};

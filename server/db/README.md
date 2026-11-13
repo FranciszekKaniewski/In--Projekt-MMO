@@ -15,8 +15,8 @@ Migracje należy wykonywać po kolei: 001, potem 002.
 ORM może ułatwiać obsługę rozbudowanego modelu danych. Obecny schemat opisujemy
 migracjami SQL; ich tabele można następnie odwzorować również w ORM.
 Jawny SQL pozwala prześledzić ograniczenia i relacje kont oraz postaci.
-Serwer korzysta z `epgsql`; `server_db` obsługuje połączenie, a
-`server_accounts` zawiera parametryzowane zapytania do kont i postaci.
+`server_db` obsługuje połączenie przez `epgsql`. Parametryzowane zapytania
+znajdują się w `server_accounts` dla kont i w `server_characters` dla postaci.
 
 Przykład zapytania używanego przy logowaniu:
 
