@@ -43,6 +43,7 @@ public:
         auto reply = std::move(replies.front()); replies.pop_front(); return reply;
     }
     bool isAuthenticated() const override { return authenticated; }
+    std::optional<int> pingMs() const override { return std::nullopt; }
     std::optional<CharacterState> selectedCharacter() const override { return selected; }
     void disconnect() override { ++disconnects; authenticated = false; selected.reset(); replies.clear(); }
     void success(ServerReply::Type type) {

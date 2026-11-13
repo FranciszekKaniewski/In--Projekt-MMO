@@ -100,10 +100,18 @@ int wmain(int argc, wchar_t** argv) {
                 require(!client->pollWorld() && client->isAuthenticated(), "Leaving retained stale world state");
                 require(await(*client, client->listCharacters()).type == ServerReply::Type::Characters,
                         "The TLS session did not survive leaving the world");
+                const auto pingDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+                while(!client->pingMs() && std::chrono::steady_clock::now() < pingDeadline) {
+                    require(!client->poll(), "Ping interfered with ordinary replies");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+                const auto ping = client->pingMs();
+                require(ping && *ping >= 20, "Ping did not measure the delayed TLS reply");
             }
         }
         client->disconnect();
         require(!client->isAuthenticated() && !client->selectedCharacter(), "Disconnect retained session state");
+        require(!client->pingMs(), "Disconnect retained a stale ping");
         std::cout << mode << ": passed\n";
         return 0;
     } catch(const std::exception& error) {

@@ -118,6 +118,9 @@ def run_case(mode, ca_file, tls_version):
                                  input_ack=0, vx=0, vy=0)]})
                     elif kind == "leave_world" and mode == "world":
                         send(connection, {"type": "world_left"})
+                    elif kind == "ping":
+                        time.sleep(0.03)
+                        send(connection, {"type": "pong"})
                     else:
                         raise AssertionError("Unexpected request type")
         except (EOFError, ssl.SSLError, ConnectionError, TimeoutError):
@@ -154,17 +157,19 @@ def run_case(mode, ca_file, tls_version):
             accept_thread.join(timeout=2)
     assert result.returncode == 0, result.stdout + result.stderr
     assert not errors, errors
+    command_types = [kind for _, kind in requests if kind != "ping"]
     if mode in {"untrusted", "hostname", "missing_ca"}:
         assert not requests, "Credentials were sent before certificate validation"
     if mode in {"tls12", "tls13", "expired", "unicode_path"}:
-        assert [kind for _, kind in requests] == ["login", "list_characters", "select_character"]
+        assert command_types == ["login", "list_characters", "select_character"]
         assert {number for number, _ in requests} == {0}, "Scenes would require a new login connection"
     if mode.startswith("map"):
-        assert [kind for _, kind in requests] == ["login", "list_characters", "select_character", "get_map"]
+        assert command_types == ["login", "list_characters", "select_character", "get_map"]
         assert {number for number, _ in requests} == {0}
     if mode == "world":
-        assert [kind for _, kind in requests] == ["login", "list_characters", "select_character",
+        assert command_types == ["login", "list_characters", "select_character",
             "enter_world", "move_input", "move_input", "list_characters", "leave_world", "list_characters"]
+        assert (0, "ping") in requests
     print(result.stdout.strip())
 
 

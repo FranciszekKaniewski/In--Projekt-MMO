@@ -339,24 +339,28 @@ void App::render() {
     }
 
     if(devMode) {
-        const std::string fpsText = "FPS: " + std::to_string(currentFPS);
-        if(!fpsLabel) {
-            fpsLabel = new Label(Font("Assets/fonts/Lato-Regular.ttf", 20, {255,255,255,255}),
-                                 fpsText, {0,0,0,180}, {8,8,156,28});
-            fpsLabel->alignment = Label::Alignment::Left;
-            fpsLabel->margin = 8;
-            fpsLabel->bgCornerRadius = 4;
-        } else if(fpsLabel->text != fpsText) {
-            fpsLabel->updateText(fpsText);
-        }
-        fpsLabel->draw();
+        const auto drawCounter = [](Label*& label, const std::string& text, int y) {
+            if(!label) {
+                label = new Label(Font("Assets/fonts/Lato-Regular.ttf", 20, {255,255,255,255}),
+                                  text, {0,0,0,180}, {8,y,156,28});
+                label->alignment = Label::Alignment::Left;
+                label->margin = 8;
+                label->bgCornerRadius = 4;
+            } else if(label->text != text) {
+                label->updateText(text);
+            }
+            label->draw();
+        };
+        drawCounter(fpsLabel, "FPS: " + std::to_string(currentFPS), 8);
+        const auto ping = serverClient ? serverClient->pingMs() : std::nullopt;
+        drawCounter(pingLabel, ping ? "Ping: " + std::to_string(*ping) + " ms" : "Ping: --", 48);
     }
 
     SDL_RenderPresent(renderer);
 }
 
 void App::clean() {
-    const bool hadResources = fpsLabel || sceneManager || renderer || window || sdlInitialized ||
+    const bool hadResources = fpsLabel || pingLabel || sceneManager || renderer || window || sdlInitialized ||
         ttfInitialized || imageInitialized || mixerInitialized || audioOpened;
     isRunning = false;
 
@@ -387,6 +391,8 @@ void App::clean() {
 
     delete fpsLabel;
     fpsLabel = nullptr;
+    delete pingLabel;
+    pingLabel = nullptr;
     audio.clear();
     if(renderer) SDL_DestroyRenderer(renderer);
     renderer = nullptr;

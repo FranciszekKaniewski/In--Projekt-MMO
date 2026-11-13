@@ -17,6 +17,8 @@ using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
 constexpr std::size_t maxMapBytes = 1024 * 1024;
 constexpr std::size_t mapFrameBytes = 4096;
+constexpr auto pingInterval = std::chrono::seconds(1);
+constexpr auto pingFreshness = std::chrono::seconds(5);
 
 std::int64_t integer(const Json& value, std::int64_t minimum = 1) {
     if(!value.is_number_integer() ||
@@ -122,6 +124,9 @@ class AsyncGameClient final : public GameClient {
     bool inWorld = false;
     std::deque<WorldSnapshot> worldSnapshots;
     std::int64_t latestWorldTick = 0;
+    std::optional<std::pair<int, Clock::time_point>> pingSample;
+    std::optional<Clock::time_point> pingSent; // Network worker only.
+    Clock::time_point nextPing{};
     TlsConnection connection;
     std::thread worker;
 
@@ -151,8 +156,21 @@ class AsyncGameClient final : public GameClient {
         worldSnapshots.push_back(std::move(snapshot));
     }
 
-    bool handleWorldEvent(const Json& message) {
+    bool handleEvent(const Json& message) {
         const auto type = message.value("type", "");
+        if(type == "pong") {
+            if(pingSent) {
+                const auto now = Clock::now();
+                const auto elapsed = now - *pingSent;
+                pingSent.reset();
+                std::lock_guard<std::mutex> lock(mutex);
+                if(activeGeneration == generation.load() && authenticated && elapsed <= pingFreshness) {
+                    const auto milliseconds = std::chrono::round<std::chrono::milliseconds>(elapsed);
+                    pingSample = {static_cast<int>(milliseconds.count()), now};
+                }
+            }
+            return true;
+        }
         if(type == "move_error") throw NetworkError(text(message.at("code"), 64));
         if(type != "world_state") return false;
         postWorld(message);
@@ -168,7 +186,7 @@ class AsyncGameClient final : public GameClient {
             const auto frame = connection.receiveFrame(remaining);
             if(!frame) throw NetworkError("connection_timeout");
             header = Json::parse(*frame);
-        } while(handleWorldEvent(header));
+        } while(handleEvent(header));
         if(command.body.at("type") != "get_map" || header.at("type") == "error")
             return decode(header, command);
 
@@ -207,7 +225,9 @@ class AsyncGameClient final : public GameClient {
     void post(ServerReply reply, std::uint64_t version) {
         std::lock_guard<std::mutex> lock(mutex);
         if(version != generation.load() || stopping) return;
-        if(reply.type == ServerReply::Type::Login) { authenticated = true; selected.reset(); }
+        if(reply.type == ServerReply::Type::Login) {
+            authenticated = true; selected.reset(); nextPing = Clock::now() + pingInterval;
+        }
         if(reply.type == ServerReply::Type::CharacterSelected) selected = reply.character;
         if(reply.type == ServerReply::Type::WorldJoined) {
             if(!selected || !reply.character || selected->id != reply.character->id ||
@@ -223,10 +243,12 @@ class AsyncGameClient final : public GameClient {
     }
 
     void clearSession(std::uint64_t version) {
+        pingSent.reset();
         std::lock_guard<std::mutex> lock(mutex);
         if(version == generation.load()) {
             authenticated = false; selected.reset(); inWorld = false;
             worldSnapshots.clear(); latestWorldTick = 0;
+            pingSample.reset();
         }
     }
 
@@ -274,11 +296,16 @@ class AsyncGameClient final : public GameClient {
                     }
                     post(std::move(reply), activeGeneration);
                 } else if(connected) {
+                    const auto now = Clock::now();
+                    if(!pingSent && now >= nextPing && isAuthenticated()) {
+                        pingSent = now;
+                        nextPing = now + pingInterval;
+                        connection.sendFrame(R"({"type":"ping"})", std::chrono::milliseconds(config.timeoutMs));
+                    }
                     const auto frame = connection.receiveFrame(idleWait);
                     if(!frame) continue;
                     const auto message = Json::parse(*frame);
-                    if(handleWorldEvent(message)) continue;
-                    if(message.value("type", "") == "pong") continue;
+                    if(handleEvent(message)) continue;
                     if(message.value("type", "") != "error") throw NetworkError("invalid_response");
                     ServerReply failure;
                     failure.error = text(message.at("code"), 64);
@@ -344,6 +371,11 @@ public:
     bool isAuthenticated() const override {
         std::lock_guard<std::mutex> lock(mutex); return authenticated;
     }
+    std::optional<int> pingMs() const override {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(pingSample && Clock::now() - pingSample->second <= pingFreshness) return pingSample->first;
+        return std::nullopt;
+    }
     std::optional<CharacterState> selectedCharacter() const override {
         std::lock_guard<std::mutex> lock(mutex); return selected;
     }
@@ -352,6 +384,7 @@ public:
             std::lock_guard<std::mutex> lock(mutex);
             ++generation; commands.clear(); replies.clear(); authenticated = false; selected.reset();
             inWorld = false; worldSnapshots.clear(); latestWorldTick = 0;
+            pingSample.reset();
         }
         connection.interrupt(); wake.notify_all();
     }

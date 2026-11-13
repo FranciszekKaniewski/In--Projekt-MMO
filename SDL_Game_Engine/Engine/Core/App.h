@@ -83,6 +83,7 @@ public:
 private:
     std::filesystem::path configFilePath;
     Label* fpsLabel = nullptr;
+    Label* pingLabel = nullptr;
     bool sdlInitialized = false;
     bool ttfInitialized = false;
     bool imageInitialized = false;

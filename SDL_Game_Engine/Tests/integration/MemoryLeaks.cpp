@@ -167,13 +167,13 @@ static void exerciseFPSOverlay(App& app) {
     const bool previousDevMode = app.devMode;
     App::sceneManager->closeScene(app);
     SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
-    const SDL_Rect bounds = {0,0,180,48};
-    Uint32 hidden[180 * 48] = {}, visible[180 * 48] = {}, updated[180 * 48] = {};
+    const SDL_Rect bounds = {0,0,180,88};
+    Uint32 hidden[180 * 88] = {}, visible[180 * 88] = {}, updated[180 * 88] = {};
     const auto capture = [&](Uint32* pixels) {
         app.render();
         require(SDL_RenderReadPixels(App::renderer, &bounds, SDL_PIXELFORMAT_RGBA8888,
                                     pixels, 180 * sizeof(Uint32)) == 0,
-                "Cannot inspect the FPS overlay");
+                "Cannot inspect the developer counters");
     };
     const auto pressF1 = [&](Uint8 repeat = 0) {
         SDL_Event event = {};
@@ -193,6 +193,8 @@ static void exerciseFPSOverlay(App& app) {
     capture(visible);
     require(std::memcmp(hidden, visible, sizeof(hidden)) != 0,
             "FPS label did not appear in the top-left corner");
+    require(std::memcmp(hidden + 180 * 44, visible + 180 * 44, sizeof(hidden) / 2) != 0,
+            "Ping label did not appear below FPS");
     app.currentFPS = 60;
     capture(updated);
     require(std::memcmp(visible, updated, sizeof(visible)) != 0,
@@ -200,7 +202,7 @@ static void exerciseFPSOverlay(App& app) {
     pressF1();
     capture(visible);
     require(!app.devMode && std::memcmp(hidden, visible, sizeof(hidden)) == 0,
-            "FPS label remained visible outside developer mode");
+            "Developer counters remained visible outside developer mode");
     app.currentFPS = 0;
     app.devMode = previousDevMode;
     emptyScene(app);

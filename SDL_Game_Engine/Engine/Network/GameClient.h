@@ -69,6 +69,7 @@ public:
     virtual std::optional<WorldSnapshot> pollWorld() = 0;
     virtual std::optional<ServerReply> poll() = 0;
     virtual bool isAuthenticated() const = 0;
+    virtual std::optional<int> pingMs() const = 0;
     virtual std::optional<CharacterState> selectedCharacter() const = 0;
     virtual void disconnect() = 0;
 };
