@@ -120,7 +120,7 @@ world_movement(Port) ->
         Name = unique(<<"world">>),
         AId = world_character(A, Name),
         ?assertEqual(error_reply(map_required), request(A, <<"enter_world">>)),
-        ?assertEqual(error_reply(world_required), request(A, <<"move_input">>)),
+        ?assertMatch(#{<<"type">> := <<"move_error">>, <<"code">> := <<"world_required">>}, request(A, <<"move_input">>)),
         check_map_download(A),
         ?assertMatch(#{<<"type">> := <<"world_joined">>,
                        <<"character">> := #{<<"position_x">> := 1350.0}}, request(A, <<"enter_world">>)),
@@ -131,23 +131,28 @@ world_movement(Port) ->
             Pred = fun(Players) -> maps:is_key(AId, Players) andalso maps:is_key(BId, Players) end,
             _ = await_world(A, Pred, 20),
             _ = await_world(B, Pred, 20),
-            ?assertEqual(error_reply(invalid_message), world_request(A, #{type => <<"move_input">>, dx => 2, dy => 0})),
-            ?assertMatch(#{<<"type">> := <<"move_ok">>},
-                         world_request(A, #{type => <<"move_input">>, dx => 1, dy => 0, character_id => BId})),
+            ?assertMatch(#{<<"type">> := <<"move_error">>, <<"code">> := <<"invalid_message">>},
+                         world_request(A, #{type => <<"move_input">>, seq => 1, dx => 2, dy => 0})),
+            Inputs = [#{type => <<"move_input">>, seq => Seq, dx => 1, dy => 0, character_id => BId}
+                      || Seq <- lists:seq(1, 4)],
+            lists:foreach(fun(Input) -> ok = ssl:send(A, json:encode(Input)) end, Inputs),
             Moving = fun(Players) ->
                 case maps:get(AId, Players, #{}) of
                     #{<<"position_x">> := X, <<"position_y">> := 1320.0,
-                      <<"facing">> := 2, <<"moving">> := true} when X > 1350 -> true;
+                      <<"facing">> := 2, <<"input_ack">> := Ack} when X > 1350, Ack > 0 -> true;
                     _ -> false
                 end
             end,
             _ = await_world(A, Moving, 20),
             Observed = await_world(B, Moving, 20),
             ?assertMatch(#{<<"position_x">> := 1350.0, <<"moving">> := false}, maps:get(BId, Observed)),
-            ?assertMatch(#{<<"type">> := <<"move_ok">>}, world_request(A, #{type => <<"move_input">>, dx => 0, dy => 0})),
+            %% Retransmitting an input must not advance the player again.
+            ok = ssl:send(A, json:encode(lists:last(Inputs))),
+            ok = ssl:send(A, json:encode(#{type => <<"move_input">>, seq => 5, dx => 0, dy => 0})),
             Stopped = fun(Players) ->
                 case maps:get(AId, Players, #{}) of
-                    #{<<"position_x">> := X, <<"moving">> := false} when X > 1350 -> true;
+                    #{<<"position_x">> := X, <<"moving">> := false, <<"input_ack">> := 5}
+                      when abs(X - (1350 + 4 * 160 / 60)) < 0.00001 -> true;
                     _ -> false
                 end
             end,
@@ -181,8 +186,10 @@ await_reply(Socket, Attempts) ->
 
 await_world(_, _, 0) -> error(no_matching_world_state);
 await_world(Socket, Match, Attempts) ->
-    #{<<"type">> := <<"world_state">>, <<"map_key">> := <<"map_expanded">>, <<"players">> := Rows} =
+    #{<<"type">> := <<"world_state">>, <<"map_key">> := <<"map_expanded">>,
+      <<"tick">> := Tick, <<"players">> := Rows} =
         server_test_support:receive_message(Socket),
+    ?assert(is_integer(Tick) andalso Tick > 0),
     Players = maps:from_list([{maps:get(<<"id">>, Row), Row} || Row <- Rows]),
     case Match(Players) of
         true -> Players;

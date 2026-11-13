@@ -28,7 +28,7 @@ Nieznane dodatkowe pola są ignorowane; pole `user_id` klienta nie określa kont
 | `select_character` | Zalogowane konto, własna postać | `character_selected` |
 | `get_map` | Zalogowane konto, wybrana postać | `map_data` i ramki z plikiem TMJ |
 | `enter_world` | Zalogowane konto, pobrana mapa postaci | `world_joined` |
-| `move_input` | Postać w świecie | `move_ok` |
+| `move_input` | Postać w świecie | `input_ack` w kolejnym stanie świata |
 | `leave_world` | Zalogowane konto | `world_left` |
 | `logout` | Zalogowane konto | `logout_ok` |
 
@@ -101,24 +101,31 @@ z pozycją startową ograniczoną do granic mapy. Jedna postać może mieć
 jedno aktywne wejście. Na jednej mapie może być do 10 postaci.
 
 ```json
-{"type":"move_input","dx":1,"dy":0}
-{"type":"move_ok"}
-{"type":"world_state","map_key":"map_expanded","players":[{"id":12,"name":"Rycerz","position_x":1358.0,"position_y":1320.0,"facing":2,"moving":true}]}
-{"type":"move_input","dx":0,"dy":0}
+{"type":"move_input","seq":1,"dx":1,"dy":0}
+{"type":"world_state","map_key":"map_expanded","tick":124,"players":[{"id":12,"name":"Rycerz","position_x":1352.6666666667,"position_y":1320.0,"facing":2,"moving":true,"vx":160.0,"vy":0.0,"input_ack":1}]}
+{"type":"move_input","seq":2,"dx":0,"dy":0}
 {"type":"leave_world"}
 {"type":"world_left"}
 ```
 
 `dx` i `dy` przyjmują liczby całkowite od -1 do 1. Osie rosną w prawo
-i w dół. Serwer wiąże kierunek z postacią zalogowanego połączenia,
-normalizuje ruch po skosie i liczy pozycję co 50 ms przy prędkości
-160 jednostek na sekundę. Klient odświeża aktywny kierunek co 250 ms,
-a serwer zeruje wejście po sekundzie bez odświeżenia.
+i w dół. `seq` rośnie od 1 po każdym wejściu do świata. Każde wejście
+reprezentuje jeden krok ruchu o długości 1/60 s. Serwer wiąże je
+z postacią połączenia, normalizuje ruch po skosie i stosuje prędkość
+160 jednostek na sekundę. W każdym kroku świata wykonuje do dwóch
+oczekujących wejść na postać. Pusta kolejka zatrzymuje postać.
 
-`world_state` jest zdarzeniem wysyłanym co 100 ms niezależnie od odpowiedzi
-na żądania. Zawiera pełną listę aktywnych postaci na bieżącej mapie, w tym
-własną postać. Klient interpoluje pozycje do najnowszego stanu przez 100 ms
-i usuwa encje, których brakuje w kolejnej liście. Wyjście, wylogowanie, wygaśnięcie sesji i zamknięcie
+`world_state` przychodzi 30 razy na sekundę niezależnie od odpowiedzi na żądania.
+Zawiera numer kroku `tick` i listę postaci na bieżącej mapie. `input_ack`
+to ostatni numer wejścia uwzględniony w pozycji danej postaci. Klient
+przewiduje ruch własnej postaci od razu, a po odebraniu stanu odtwarza
+wejścia z numerem większym od `input_ack`. Dla pozostałych postaci
+interpoluje stany według `tick` z docelowym opóźnieniem 45 ms.
+Przy braku następnego stanu może wykorzystać `vx` i `vy` przez maksymalnie
+jeden krok świata. Obie prędkości podano w jednostkach na sekundę.
+
+Odrzucone wejście w aktywnej sesji daje zdarzenie `move_error` z polem
+`code`. Wyjście, wylogowanie, wygaśnięcie sesji i zamknięcie
 połączenia usuwają postać ze świata. Ruch jest przechowywany w pamięci,
 więc po ponownym wyborze postać startuje z pozycji zapisanej w PostgreSQL.
 

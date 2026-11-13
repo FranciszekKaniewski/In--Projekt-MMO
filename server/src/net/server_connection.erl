@@ -55,6 +55,7 @@ handle_info({timeout, Timer, session}, #{timer := Timer, socket := Socket} = Sta
 handle_info({timeout, Timer, _}, #{timer := Timer} = State) -> {stop, normal, State};
 handle_info(_, State) -> {noreply, State}.
 
+send_reply(_, no_reply) -> ok;
 send_reply(Socket, {map_data, Header, Bytes}) ->
     case send_reply(Socket, Header) of
         ok -> send_map(Socket, Bytes);

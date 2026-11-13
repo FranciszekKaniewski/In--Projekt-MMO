@@ -96,15 +96,19 @@ dispatch(<<"enter_world">>, _, #{character := Character, map_bounds := Bounds} =
 dispatch(<<"enter_world">>, _, State) -> {error_message(map_required), State};
 dispatch(<<"move_input">>, Message, #{world_ref := _} = State) ->
     case Message of
-        #{<<"dx">> := X, <<"dy">> := Y} when is_integer(X), X >= -1, X =< 1,
-                                            is_integer(Y), Y >= -1, Y =< 1 ->
-            case server_world:move(X, Y) of
-                ok -> {#{type => <<"move_ok">>}, State};
-                {error, Code} -> {error_message(Code), State}
+        #{<<"seq">> := Sequence, <<"dx">> := X, <<"dy">> := Y}
+          when is_integer(X), X >= -1, X =< 1, is_integer(Y), Y >= -1, Y =< 1 ->
+            case valid_id(Sequence, 1) of
+                true ->
+                    case server_world:move(Sequence, X, Y) of
+                        ok -> {no_reply, State};
+                        {error, Code} -> {move_error(Code), State}
+                    end;
+                false -> {move_error(invalid_message), State}
             end;
-        _ -> {error_message(invalid_message), State}
+        _ -> {move_error(invalid_message), State}
     end;
-dispatch(<<"move_input">>, _, State) -> {error_message(world_required), State};
+dispatch(<<"move_input">>, _, State) -> {move_error(world_required), State};
 dispatch(<<"leave_world">>, _, State) ->
     {#{type => <<"world_left">>}, leave_world(State)};
 dispatch(<<"logout">>, _, State) ->
@@ -131,3 +135,6 @@ decode(Data) ->
 
 error_message(Code) ->
     #{<<"type">> => <<"error">>, <<"code">> => atom_to_binary(Code, utf8)}.
+
+move_error(Code) ->
+    (error_message(Code))#{<<"type">> := <<"move_error">>}.
