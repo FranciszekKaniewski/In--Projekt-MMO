@@ -63,7 +63,7 @@ int wmain(int argc, wchar_t** argv) {
             if(mode == "map" || mode == "map_wrong_key" || mode == "map_truncated") {
                 const auto downloaded = await(*client, client->downloadMap());
                 if(mode == "map") {
-                    std::ifstream map("Game/Assets/Maps/Map_expanded.tmj", std::ios::binary);
+                    std::ifstream map("../server/priv/maps/Map_expanded.tmj", std::ios::binary);
                     require(map.good(), "Missing map fixture");
                     const std::string expected((std::istreambuf_iterator<char>(map)), {});
                     require(downloaded.type == ServerReply::Type::MapData && downloaded.mapData == expected,

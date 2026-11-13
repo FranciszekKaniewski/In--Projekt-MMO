@@ -3,6 +3,7 @@
 #include "../../Engine/Scenes/SceneManager.h"
 #include "../../Engine/Scenes/UIScene.h"
 #include "../../Engine/Scenes/GameScene.h"
+#include "../support/GameSceneFixture.h"
 #include <SDL_image.h>
 #include <deque>
 #include <cstring>
@@ -175,7 +176,7 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     reply.request = canvas.client->current;
     canvas.client->replies.push_back(reply); canvas.update();
     REQUIRE(canvas.client->mapDownloads == 2);
-    std::ifstream input("Assets/Maps/Map_expanded.tmj", std::ios::binary);
+    std::ifstream input(std::filesystem::path(serverMaps) / "Map_expanded.tmj", std::ios::binary);
     REQUIRE(input.good());
     downloaded.request = canvas.client->current;
     downloaded.mapData.assign(std::istreambuf_iterator<char>(input), {});

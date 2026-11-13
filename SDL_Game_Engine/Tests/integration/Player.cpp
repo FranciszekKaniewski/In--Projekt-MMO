@@ -15,6 +15,7 @@
 #include "../../Engine/ECS/Components/VelocityComponent.h"
 #include "../../Engine/Scenes/GameScene.h"
 #include "../../Engine/Scenes/SceneList.h"
+#include "../support/GameSceneFixture.h"
 
 #include <SDL_image.h>
 #include <array>
@@ -285,7 +286,7 @@ TEST_CASE_METHOD(PlayerSDLFixture, "Scene systems move externally controlled pla
 TEST_CASE_METHOD(PlayerSDLFixture, "Game scene renders supplied player at the followed map position",
                  "[integration][player][camera]") {
     PlayerCanvas canvas(1280, 720);
-    std::unique_ptr<Scene> scene(createScene2());
+    std::unique_ptr<Scene> scene(createGameSceneFixture());
     scene->onEnter(canvas.app);
     App::deltaTime = 0.0f;
     scene->update(canvas.app);

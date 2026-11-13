@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT.parent / "server/test/fixtures"
 CLIENT = ROOT / "build/tests/network/client.exe"
 CHARACTER_ID = 9007199254741009
-MAP = ROOT / "Game/Assets/Maps/Map_expanded.tmj"
+MAP = ROOT.parent / "server/priv/maps/Map_expanded.tmj"
 
 
 def receive_exact(connection, count):
@@ -133,7 +133,7 @@ def run_case(mode, ca_file, tls_version):
         accept_thread.start()
         try:
             result = subprocess.run([str(CLIENT), str(listener.getsockname()[1]), host,
-                                     str(ca_file), mode], text=True, capture_output=True,
+                                     str(ca_file), mode], cwd=ROOT, text=True, capture_output=True,
                                     encoding="utf-8", timeout=12)
         finally:
             stop.set()

@@ -3,6 +3,7 @@
 #define SDL_MAIN_HANDLED
 #include "../../Engine/Scenes/UIScene.h"
 #include "../../Engine/Scenes/SceneManager.h"
+#include "../support/GameSceneFixture.h"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <SDL_test_memory.h>
@@ -130,7 +131,7 @@ static void emptyScene(App& app) {
 }
 
 static void exerciseScenes(App& app) {
-    for(auto factory : {createScene1, createSettingsScene, createScene2}) {
+    for(auto factory : {createScene1, createSettingsScene, createGameSceneFixture}) {
         App::sceneManager->changeScene(factory, app);
         app.update();
         app.render();

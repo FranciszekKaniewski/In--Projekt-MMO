@@ -44,9 +44,9 @@ Port `0` w konfiguracji oznacza, że system wybierze wolny port; używają go te
 
 Po kliknięciu `Play` klient wybiera postać i pobiera przypisany jej plik TMJ
 przez TLS. Klucze `map_expanded` i `map_example2` wskazują odpowiednio na
-`Map_expanded.tmj` i `Map_example2.tmj`. Domyślnie serwer czyta je z
-`../SDL_Game_Engine/Game/Assets/Maps`. Przy osobnym wdrożeniu skopiuj pliki TMJ
-do katalogu wskazanego przez `GAME_MAP_DIR`. Atlas graficzny należy do zasobów klienta.
+`Map_expanded.tmj` i `Map_example2.tmj` w katalogu `server/priv/maps`.
+Katalog jest częścią aplikacji OTP. Ścieżkę do innego katalogu map można
+ustawić przez `GAME_MAP_DIR`. Atlas graficzny należy do zasobów klienta.
 
 ## Logowanie i autoryzacja
 

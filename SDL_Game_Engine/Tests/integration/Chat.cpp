@@ -12,6 +12,7 @@
 #include "../../Engine/Scenes/SceneList.h"
 #include "../../Engine/Text/Utf8.h"
 #include "../../Game/Entities/Player.h"
+#include "../support/GameSceneFixture.h"
 
 #include <SDL_image.h>
 #include <array>
@@ -299,7 +300,7 @@ TEST_CASE_METHOD(ChatSDLFixture, "Speech bubbles render over self and nearby NPC
 TEST_CASE_METHOD(ChatSDLFixture, "Game chat renders a wrapped 256-character bubble and bottom-left panel",
                  "[integration][chat][ui]") {
     ChatCanvas canvas;
-    std::unique_ptr<Scene> scene(createScene2());
+    std::unique_ptr<Scene> scene(createGameSceneFixture());
     scene->onEnter(canvas.app);
     auto* game = dynamic_cast<GameScene*>(scene.get());
     REQUIRE(game != nullptr);

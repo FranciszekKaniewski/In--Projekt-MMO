@@ -2,6 +2,7 @@
 #define SDL_MAIN_HANDLED
 #include "../../Engine/Core/App.h"
 #include "../../Engine/World/Map.h"
+#include "../support/GameSceneFixture.h"
 #include <SDL_image.h>
 #include <nlohmann/json.hpp>
 
@@ -178,7 +179,7 @@ TEST_CASE_METHOD(MapSDLFixture, "Map rejects invalid exports without losing the 
 TEST_CASE_METHOD(MapSDLFixture, "Example island map loads its matching PNG", "[integration][map]") {
     MapCanvas canvas(1280, 720);
     Map map;
-    REQUIRE(map.load("Assets/Maps/Map_example.json"));
+    REQUIRE(map.load("../../../Tests/fixtures/maps/Map_example.json"));
     REQUIRE(map.width() == 1280);
     REQUIRE(map.height() == 1280);
     REQUIRE(map.tileWidth() == 16);
@@ -191,7 +192,7 @@ TEST_CASE_METHOD(MapSDLFixture, "Example island map loads its matching PNG", "[i
     map.draw(App::renderer);
 
     std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)> reference{
-        IMG_Load("Assets/Maps/Map_example.png"), SDL_FreeSurface};
+        IMG_Load("../../../Tests/fixtures/maps/Map_example.png"), SDL_FreeSurface};
     REQUIRE(reference != nullptr);
     for (const auto point : {SDL_Point{0, 0}, {640, 640}}) {
         Uint32 pixel = 0;
@@ -242,11 +243,11 @@ TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "
 TEST_CASE_METHOD(MapSDLFixture, "Both supplied TMJ maps load with the game tileset", "[integration][map]") {
     MapCanvas canvas;
     Map map;
-    REQUIRE(map.load("Assets/Maps/Map_example2.tmj"));
+    REQUIRE(map.load(std::filesystem::path(serverMaps) / "Map_example2.tmj"));
     REQUIRE(map.width() == 1280);
     REQUIRE(map.tileWidth() == 32);
     REQUIRE(map.tileCount() == 1600);
-    REQUIRE(map.load("Assets/Maps/Map_expanded.tmj"));
+    REQUIRE(map.load(std::filesystem::path(serverMaps) / "Map_expanded.tmj"));
     REQUIRE(map.width() == 2560);
     REQUIRE(map.tileWidth() == 16);
     REQUIRE(map.tileCount() == 25600);

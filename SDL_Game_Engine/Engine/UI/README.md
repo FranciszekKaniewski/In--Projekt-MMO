@@ -75,7 +75,7 @@ public:
         panel->addButton(buttonFont, "Start", {60, 120, 220, 255},
             {24, 128, 432, 48}, 1.05f, [&app]() {
                 app.audio.playSound("button.click");
-                App::sceneManager->changeScene(createScene2, app);
+                App::sceneManager->changeScene(createCharactersScene, app);
             });
 
         panel->addSlider(0, 100, app.settings.volume, {24, 208, 432, 40}, 1,

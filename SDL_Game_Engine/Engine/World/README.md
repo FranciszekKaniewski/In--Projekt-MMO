@@ -9,8 +9,8 @@
 // Pole sceny:
 Map map;
 
-// W onEnter(), po utworzeniu renderera przez App:
-if (!map.load("Assets/Maps/Map_example2.tmj")) {
+// Po pobraniu pliku TMJ i utworzeniu renderera przez App:
+if (!map.loadTilemap(downloadedTmj, "Assets/Graphics/TileSet_001.png")) {
     std::cerr << map.error() << '\n';
 }
 map.position = {0.0f, 0.0f}; // Lewy górny narożnik w świecie.
@@ -35,7 +35,8 @@ projekcji silnika, bez zmiany rozmiaru świata ani zasięgu kamery w jednostkach
 
 ## Tilemapy Tiled
 
-`Map_expanded.tmj` i `Map_example2.tmj` używają tego samego atlasu.
+`Map_expanded.tmj` i `Map_example2.tmj` znajdują się w `server/priv/maps`
+i używają tego samego atlasu z zasobów klienta.
 Loader obsługuje skończone mapy ortogonalne z jednym osadzonym opisem atlasu
 oraz wyrównanymi warstwami kafelków o rozmiarze mapy. Tablice `data` zawierają
 liczbowe GID-y bez flag odbicia. `0` oznacza puste pole. Warstwy są składane
@@ -52,7 +53,7 @@ Obsługiwane są pola bez obrotu. `duration`, `filename`, `sourceSize`, `spriteS
 
 Przekazany eksport nie zawiera identyfikatorów kafelków odwołujących się do `TileSet_001.png`.
 Sam JSON nie wystarcza do odtworzenia grafiki. `Map_example.png` został wyeksportowany z pliku
-`Map_example.aseprite` i umieszczony razem z JSON-em w `Game/Assets/Maps`.
+`Map_example.aseprite` i umieszczony razem z JSON-em w `Tests/fixtures/maps`.
 W obrazie są już złożone wszystkie warstwy. Mapa jest rysowana jednym wywołaniem SDL z prostokątem
 źródłowym obejmującym widok kamery, bez tysięcy encji i bez szczelin między kafelkami.
 Poza widokiem nie wysyła polecenia rysowania. Przy ułamkowym przesunięciu wycinek jest poszerzany

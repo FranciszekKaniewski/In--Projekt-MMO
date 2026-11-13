@@ -14,7 +14,7 @@
     {
       "firstgid": 1,
       "name": "TileSet_001",
-      "image": "../Graphics/TileSet_001.png",
+      "image": "../../../SDL_Game_Engine/Game/Assets/Graphics/TileSet_001.png",
       "imagewidth": 448,
       "imageheight": 448,
       "columns": 28,

@@ -101,7 +101,7 @@ lifecycle(Port) ->
 check_map_download(Socket) ->
     #{<<"type">> := <<"map_data">>, <<"map_key">> := <<"map_expanded">>, <<"size">> := Size} =
         request(Socket, <<"get_map">>),
-    {ok, Expected} = file:read_file("../SDL_Game_Engine/Game/Assets/Maps/Map_expanded.tmj"),
+    {ok, Expected} = file:read_file(filename:join([code:priv_dir(server), "maps", "Map_expanded.tmj"])),
     ?assert(Size > 4096),
     ?assertEqual(byte_size(Expected), Size),
     ?assertEqual(Expected, iolist_to_binary(receive_map(Socket, Size, []))),
