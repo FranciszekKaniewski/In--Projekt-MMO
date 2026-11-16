@@ -1,6 +1,6 @@
 -module(server_world).
 -behaviour(gen_server).
--export([start_link/0, enter/3, leave/0, detach/0, move/3, delivered/1]).
+-export([start_link/0, enter/3, leave/0, detach/0, move/3, chat/1, delivered/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
 -define(TICK_RATE, 30).
@@ -31,6 +31,7 @@ cancel_reservation(Ref, Error) ->
 leave() -> gen_server:call(?MODULE, leave, infinity).
 detach() -> gen_server:cast(?MODULE, {detach, self()}).
 move(Sequence, X, Y) -> gen_server:call(?MODULE, {move, Sequence, X, Y}).
+chat(Text) -> gen_server:call(?MODULE, {chat, Text}).
 delivered(Ref) -> gen_server:cast(?MODULE, {delivered, self(), Ref}).
 
 init([]) ->
@@ -79,6 +80,17 @@ handle_call({move, Sequence, X, Y}, {Pid, _}, {Tick, Start, Players} = State) ->
                     {reply, ok, {Tick, Start, Players#{Pid := Updated}}};
                 false -> {reply, {error, server_busy}, State}
             end;
+        _ -> {reply, {error, world_required}, State}
+    end;
+handle_call({chat, Text}, {Pid, _}, {_, _, Players} = State) ->
+    case maps:find(Pid, Players) of
+        {ok, #{status := active, character := #{id := Id, name := Name}}} ->
+            Frame = json:encode(#{type => <<"chat_message">>, character_id => Id, name => Name, text => Text}),
+            maps:foreach(fun
+                (Recipient, #{status := active, ref := Ref}) -> Recipient ! {chat_message, Ref, Frame};
+                (_, _) -> ok
+            end, Players),
+            {reply, ok, State};
         _ -> {reply, {error, world_required}, State}
     end.
 

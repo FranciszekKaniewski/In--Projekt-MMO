@@ -71,7 +71,7 @@ invalid_messages(Port) ->
              {<<"{\"type\":1}">>, <<"invalid_message">>},
              {<<"{\"type\":\"unknown\"}">>, <<"unknown_message_type">>},
              {<<"{\"type\":\"join\",\"name\":\"Guest\"}">>, <<"unknown_message_type">>},
-             {<<"{\"type\":\"chat_send\",\"text\":\"hello\"}">>, <<"unknown_message_type">>}],
+             {<<"{\"type\":\"chat_send\",\"text\":\"hello\"}">>, <<"authentication_required">>}],
     with_client(Port, fun(Socket) ->
         lists:foreach(fun({Data, Code}) ->
             ok = ssl:send(Socket, Data),

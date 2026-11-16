@@ -45,7 +45,7 @@ dispatch(Type, _, State) when Type =:= <<"register">>; Type =:= <<"login">> ->
 dispatch(Type, _, #{user := undefined} = State)
   when Type =:= <<"list_characters">>; Type =:= <<"select_character">>;
        Type =:= <<"get_map">>; Type =:= <<"logout">>; Type =:= <<"enter_world">>;
-       Type =:= <<"move_input">>; Type =:= <<"leave_world">> ->
+       Type =:= <<"move_input">>; Type =:= <<"chat_send">>; Type =:= <<"leave_world">> ->
     {error_message(authentication_required), State};
 dispatch(Type, _, #{world_ref := _} = State)
   when Type =:= <<"select_character">>; Type =:= <<"get_map">>; Type =:= <<"enter_world">> ->
@@ -109,6 +109,16 @@ dispatch(<<"move_input">>, Message, #{world_ref := _} = State) ->
         _ -> {move_error(invalid_message), State}
     end;
 dispatch(<<"move_input">>, _, State) -> {move_error(world_required), State};
+dispatch(<<"chat_send">>, Message, #{world_ref := _} = State) ->
+    Result = case chat_text(maps:get(<<"text">>, Message, undefined)) of
+        {ok, Text} -> server_world:chat(Text);
+        Error -> Error
+    end,
+    case Result of
+        ok -> {no_reply, State};
+        {error, Code} -> {chat_error(Code), State}
+    end;
+dispatch(<<"chat_send">>, _, State) -> {chat_error(world_required), State};
 dispatch(<<"leave_world">>, _, State) ->
     case leave_world(State) of
         {ok, Left} -> {#{type => <<"world_left">>}, Left};
@@ -123,6 +133,18 @@ dispatch(_, _, State) -> {error_message(unknown_message_type), State}.
 
 valid_id(Value, Minimum) ->
     is_integer(Value) andalso Value >= Minimum andalso Value =< 9223372036854775807.
+
+chat_text(Text) when is_binary(Text), byte_size(Text) =< 256 * 4 ->
+    case unicode:characters_to_list(Text) of
+        Characters when is_list(Characters), length(Characters) =< 256 ->
+            Trimmed = string:trim(Characters),
+            case Trimmed =/= [] andalso lists:all(fun(C) -> C >= 32 andalso C =/= 127 end, Characters) of
+                true -> {ok, unicode:characters_to_binary(Trimmed)};
+                false -> {error, invalid_message}
+            end;
+        _ -> {error, invalid_message}
+    end;
+chat_text(_) -> {error, invalid_message}.
 
 clear_session(#{world_ref := _} = State) ->
     server_world:detach(),
@@ -148,3 +170,6 @@ error_message(Code) ->
 
 move_error(Code) ->
     (error_message(Code))#{<<"type">> := <<"move_error">>}.
+
+chat_error(Code) ->
+    (error_message(Code))#{<<"type">> := <<"chat_error">>}.

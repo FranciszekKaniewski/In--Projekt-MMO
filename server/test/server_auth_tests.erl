@@ -12,6 +12,8 @@ auth_database_test_() ->
                   {"character lists are paginated and scoped to the account", fun() -> pages(Port) end},
                   {"world simulates and broadcasts movement to both players", {timeout, 15,
                      fun() -> world_movement(Port) end}},
+                  {"chat reaches players across maps with the server's sender identity", {timeout, 15,
+                     fun() -> world_chat(Port) end}},
                   {"database connection recovers after disconnect", fun() -> reconnect_db() end},
                   {"database failure never authenticates a connection", fun() -> database_failure(Port) end},
                   {"registration enforces password policy without locking out existing accounts",
@@ -112,6 +114,41 @@ receive_map(Socket, Size, Chunks) ->
     {ok, Chunk} = ssl:recv(Socket, 0, 5000),
     ?assertEqual(min(4096, Size), byte_size(Chunk)),
     receive_map(Socket, Size - byte_size(Chunk), [Chunk | Chunks]).
+
+world_chat(Port) ->
+    server_test_support:with_client(Port, fun(Sender) ->
+        Id = world_character(Sender, unique(<<"chat">>)),
+        Message = #{type => <<"chat_send">>, text => <<"Cześć!"/utf8>>,
+                    character_id => 123, name => <<"Spoofed name">>},
+        ?assertMatch(#{<<"type">> := <<"chat_error">>, <<"code">> := <<"world_required">>},
+                     world_request(Sender, Message)),
+        #{<<"name">> := Name} = join_chat_world(Sender, <<"map_expanded">>),
+        server_test_support:with_client(Port, fun(Receiver) ->
+            ReceiverId = world_character(Receiver, unique(<<"chat">>)),
+            {ok, 1} = server_db:query("UPDATE public.characters SET map_key = $1 WHERE id = $2",
+                                     [<<"map_example2">>, ReceiverId]),
+            ?assertMatch(#{<<"type">> := <<"character_selected">>}, select(Receiver, ReceiverId)),
+            _ = join_chat_world(Receiver, <<"map_example2">>),
+            lists:foreach(fun(Invalid) ->
+                ?assertMatch(#{<<"type">> := <<"chat_error">>, <<"code">> := <<"invalid_message">>},
+                             world_request(Sender, Message#{text := Invalid}))
+            end, [<<"  ">>, <<"two\nlines">>, binary:copy(<<"ą"/utf8>>, 257), 123]),
+            Text = binary:copy(<<"ą"/utf8>>, 256),
+            Event = #{<<"type">> => <<"chat_message">>, <<"character_id">> => Id,
+                      <<"name">> => Name, <<"text">> => Text},
+            ?assertEqual(Event, world_request(Sender, Message#{text := Text})),
+            ?assertEqual(Event, await_reply(Receiver, 20)),
+            ?assertMatch(#{<<"type">> := <<"pong">>}, world_request(Sender, #{type => <<"ping">>})),
+            ?assertMatch(#{<<"type">> := <<"pong">>}, world_request(Receiver, #{type => <<"ping">>}))
+        end)
+    end).
+
+join_chat_world(Socket, MapKey) ->
+    #{<<"type">> := <<"map_data">>, <<"map_key">> := MapKey, <<"size">> := Size} =
+        request(Socket, <<"get_map">>),
+    _ = receive_map(Socket, Size, []),
+    #{<<"type">> := <<"world_joined">>, <<"character">> := Character} = request(Socket, <<"enter_world">>),
+    Character.
 
 world_movement(Port) ->
     server_test_support:with_client(Port, fun(A) ->
