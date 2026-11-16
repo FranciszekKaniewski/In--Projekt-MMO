@@ -103,6 +103,7 @@ bool Map::load(const std::filesystem::path& jsonPath, const std::filesystem::pat
         cellWidth = tileWidth;
         cellHeight = tileHeight;
         cellCount = frames.size();
+        blockedTiles.clear();
         lastError.clear();
         return true;
     } catch (const std::exception& exception) {
@@ -168,6 +169,7 @@ void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
     const Surface image(SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32), SDL_FreeSurface);
     if (!atlas || !image || SDL_FillRect(image.get(), nullptr, 0) != 0) throw std::runtime_error(SDL_GetError());
 
+    std::vector<bool> collision;
     // Compose once so the camera can still draw one clipped texture per frame.
     for (const auto& layer : layers) {
         const auto opacity = layer.value("opacity", 1.0);
@@ -179,6 +181,11 @@ void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
         }
         const auto& gids = layer.at("data");
         if (!gids.is_array() || gids.size() != count) throw std::runtime_error("Invalid tile layer data.");
+        const bool isCollision = layer.value("name", "") == "Collision";
+        if (isCollision) {
+            if (!collision.empty()) throw std::runtime_error("Expected at most one Collision layer.");
+            collision.resize(count);
+        }
         const bool visible = layer.value("visible", true);
         for (std::size_t i = 0; i < count; ++i) {
             const auto& value = gids[i];
@@ -186,6 +193,10 @@ void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
                 throw std::runtime_error("Invalid or unsupported tile ID.");
             }
             const int gid = value.get<int>();
+            if (isCollision) {
+                collision[i] = gid != 0;
+                continue;
+            }
             if (!gid || !visible || opacity == 0) continue;
             const int sourceX = (gid - 1) % atlasColumns * tileWidth;
             const int sourceY = (gid - 1) / atlasColumns * tileHeight;
@@ -219,7 +230,60 @@ void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
     cellWidth = tileWidth;
     cellHeight = tileHeight;
     cellCount = count;
+    blockedTiles = std::move(collision);
     lastError.clear();
+}
+
+math::Vector2 Map::moveBox(math::Vector2 from, math::Vector2 destination, math::Vector2 halfSize) const {
+    const double width = static_cast<double>(imageWidth) * scale;
+    const double height = static_cast<double>(imageHeight) * scale;
+    if (!isLoaded() || !std::isfinite(scale) || scale <= 0.0f ||
+        !std::isfinite(position.x) || !std::isfinite(position.y) ||
+        !std::isfinite(from.x) || !std::isfinite(from.y) ||
+        !std::isfinite(destination.x) || !std::isfinite(destination.y) ||
+        !(halfSize.x > 0 && 2.0 * halfSize.x <= width &&
+          halfSize.y > 0 && 2.0 * halfSize.y <= height)) return from;
+
+    const auto local = [](float coordinate, float origin, float half, double size) {
+        return std::clamp(static_cast<double>(coordinate) - origin, double(half), size - half);
+    };
+    const double targetX = local(destination.x, position.x, halfSize.x, width);
+    const double targetY = local(destination.y, position.y, halfSize.y, height);
+    if (blockedTiles.empty()) {
+        return {static_cast<float>(position.x + targetX), static_cast<float>(position.y + targetY)};
+    }
+
+    const auto clipAxis = [this](double from, double to, double half,
+                                 double acrossMin, double acrossMax, bool horizontal) {
+        if (from == to) return to;
+        const double cell = static_cast<double>(horizontal ? cellWidth : cellHeight) * scale;
+        const double acrossCell = static_cast<double>(horizontal ? cellHeight : cellWidth) * scale;
+        const int stride = horizontal ? 1 : columns();
+        const int acrossStride = horizontal ? columns() : 1;
+        const bool forward = to > from;
+        const double edge = forward ? half : -half;
+        // Sweep the leading edge. Exclude tiles that only touch the box.
+        const int first = std::max(0, static_cast<int>(std::floor((std::min(from, to) + edge) / cell)));
+        const int end = std::min(horizontal ? columns() : rows(),
+                                 static_cast<int>(std::ceil((std::max(from, to) + edge) / cell)));
+        const int acrossFirst = std::max(0, static_cast<int>(std::floor(acrossMin / acrossCell)));
+        const int acrossEnd = std::min(horizontal ? rows() : columns(),
+                                       static_cast<int>(std::ceil(acrossMax / acrossCell)));
+        for (int along = forward ? first : end - 1; along >= first && along < end; along += forward ? 1 : -1) {
+            for (int across = acrossFirst; across < acrossEnd; ++across) {
+                if (blockedTiles[along * stride + across * acrossStride]) {
+                    return forward ? along * cell - half : (along + 1) * cell + half;
+                }
+            }
+        }
+        return to;
+    };
+
+    const double x = local(from.x, position.x, halfSize.x, width);
+    const double y = local(from.y, position.y, halfSize.y, height);
+    const double nextX = clipAxis(x, targetX, halfSize.x, y - halfSize.y, y + halfSize.y, true);
+    const double nextY = clipAxis(y, targetY, halfSize.y, nextX - halfSize.x, nextX + halfSize.x, false);
+    return {static_cast<float>(position.x + nextX), static_cast<float>(position.y + nextY)};
 }
 
 void Map::draw(SDL_Renderer* renderer, const CameraComponent* camera) const {
@@ -260,5 +324,6 @@ void Map::clear() noexcept {
     texture.reset();
     imageWidth = imageHeight = cellWidth = cellHeight = 0;
     cellCount = 0;
+    blockedTiles.clear();
     lastError.clear();
 }

@@ -4,6 +4,7 @@
 #include "../ECS/Components/ColliderComponent.h"
 #include "../ECS/Components/TransformComponent.h"
 #include "../ECS/Components/CameraComponent.h"
+#include "../World/Map.h"
 #include <SDL.h>
 
 #include <array>
@@ -87,6 +88,45 @@ void drawPolygon(SDL_Renderer* renderer, math::Vector2 origin,
 }
 
 } // namespace
+
+void renderMapColliderDebug(const Map& map, SDL_Renderer* renderer, bool devMode,
+                            const CameraComponent* camera) {
+    const auto& blocked = map.collisionTiles();
+    if (!devMode || !renderer || !map.isLoaded() || blocked.empty()) return;
+
+    const auto size = map.worldSize();
+    const SDL_FRect bounds{map.position.x, map.position.y, size.x, size.y};
+    if (!std::isfinite(bounds.x + bounds.w) || !std::isfinite(bounds.y + bounds.h) ||
+        !(map.scale > 0.0f) || (camera && !camera->isVisible(bounds))) return;
+
+    const auto tileSize = math::Vector2{map.tileWidth() * map.scale, map.tileHeight() * map.scale};
+    const auto origin = camera ? map.position - camera->position : map.position;
+    const int columns = map.columns();
+    int firstColumn = 0, firstRow = 0, endColumn = columns, endRow = map.rows();
+    if (camera) {
+        // Restrict the grid to cells intersecting the camera, including partially visible cells.
+        firstColumn = static_cast<int>(std::floor(std::clamp(-origin.x / tileSize.x, 0.0f, float(endColumn))));
+        firstRow = static_cast<int>(std::floor(std::clamp(-origin.y / tileSize.y, 0.0f, float(endRow))));
+        endColumn = static_cast<int>(std::ceil(std::clamp((camera->size.x - origin.x) / tileSize.x,
+                                                          0.0f, float(endColumn))));
+        endRow = static_cast<int>(std::ceil(std::clamp((camera->size.y - origin.y) / tileSize.y,
+                                                       0.0f, float(endRow))));
+    }
+
+    const ScopedDrawColor drawColor(renderer);
+    const ScopedDrawScale drawScale(renderer);
+    const auto tilePixels = project(tileSize, drawScale.scale);
+    std::vector<SDL_FRect> outlines;
+    for (int row = firstRow; row < endRow; ++row) {
+        for (int column = firstColumn; column < endColumn; ++column) {
+            if (!blocked[row * columns + column]) continue;
+            const auto corner = project(origin + math::Vector2{column * tileSize.x, row * tileSize.y},
+                                        drawScale.scale);
+            outlines.push_back({corner.x, corner.y, tilePixels.x, tilePixels.y});
+        }
+    }
+    if (!outlines.empty()) SDL_RenderDrawRectsF(renderer, outlines.data(), static_cast<int>(outlines.size()));
+}
 
 void renderColliderDebug(ecs::Registry& world, SDL_Renderer* renderer, bool devMode,
                          const CameraComponent* camera) {

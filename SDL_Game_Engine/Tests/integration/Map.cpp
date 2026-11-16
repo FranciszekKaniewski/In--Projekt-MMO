@@ -1,6 +1,8 @@
 #include <catch_amalgamated.hpp>
 #define SDL_MAIN_HANDLED
 #include "../../Engine/Core/App.h"
+#include "../../Engine/ECS/Components/CameraComponent.h"
+#include "../../Engine/Renderer/ColliderDebugRenderer.h"
 #include "../../Engine/World/Map.h"
 #include "../support/GameSceneFixture.h"
 #include <SDL_image.h>
@@ -222,6 +224,9 @@ TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "
             {"imagewidth", 4}, {"imageheight", 4}}})},
         {"layers", Json::array({layer({1, 2, 0, 0}, true), layer({0, 3, 0, 4}, true),
                                  layer({4, 4, 4, 4}, false)})}};
+    auto collision = layer({0, 1, 0, 0}, true);
+    collision["name"] = "Collision";
+    data["layers"].push_back(collision);
     Map map;
     REQUIRE(map.load(save(data, "map.tmj")));
     map.scale = 4;
@@ -230,6 +235,27 @@ TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "
     REQUIRE(canvas.isColorAt(9, 1, {0, 0, 255, 255}));
     REQUIRE(canvas.isColorAt(1, 9, {0, 0, 0, 255}));
     REQUIRE(canvas.isColorAt(9, 9, {255, 255, 0, 255}));
+    const auto contact = map.moveBox({2, 2}, {12, 2}, {1, 1});
+    REQUIRE(contact.x == 7);
+    REQUIRE(contact.y == 2);
+
+    CameraComponent camera;
+    camera.position = {4, 2};
+    camera.size = {12, 14};
+    const SDL_Color green{64, 255, 128, 255};
+    canvas.clear();
+    REQUIRE(SDL_RenderSetScale(App::renderer, 0.5f, 0.5f) == 0);
+    map.draw(App::renderer, &camera);
+    renderMapColliderDebug(map, App::renderer, false, &camera);
+    REQUIRE_FALSE(canvas.isColorAt(2, 1, green));
+    renderMapColliderDebug(map, App::renderer, true, &camera);
+    REQUIRE(canvas.isColorAt(2, 1, green));
+    REQUIRE_FALSE(canvas.isColorAt(3, 1, green));
+    REQUIRE_FALSE(canvas.isColorAt(0, 1, green));
+    float scaleX = 0.0f, scaleY = 0.0f;
+    SDL_RenderGetScale(App::renderer, &scaleX, &scaleY);
+    REQUIRE(scaleX == 0.5f);
+    REQUIRE(scaleY == 0.5f);
 
     data["tilesets"][0]["image"] = "invalid.bmp";
     const auto localAtlas = fixturePath / "colors.bmp";
@@ -247,10 +273,22 @@ TEST_CASE_METHOD(MapSDLFixture, "Both supplied TMJ maps load with the game tiles
     REQUIRE(map.width() == 1280);
     REQUIRE(map.tileWidth() == 32);
     REQUIRE(map.tileCount() == 1600);
+    const auto exampleShore = map.moveBox({640, 640}, {1280, 640}, {10, 5});
+    REQUIRE(exampleShore.x == 1174);
+    REQUIRE(exampleShore.y == 640);
     REQUIRE(map.load(std::filesystem::path(serverMaps) / "Map_expanded.tmj"));
     REQUIRE(map.width() == 2560);
     REQUIRE(map.tileWidth() == 16);
     REQUIRE(map.tileCount() == 25600);
+    const auto shore = map.moveBox({1350, 1320}, {2560, 1320}, {10, 5});
+    REQUIRE(shore.x == 2358);
+    REQUIRE(shore.y == 1320);
+    const auto slide = map.moveBox(shore, {2360, 1322}, {10, 5});
+    REQUIRE(slide.x == shore.x);
+    REQUIRE(slide.y == 1322);
+    const auto lake = map.moveBox({1350, 1320}, {1350, 800}, {10, 5});
+    REQUIRE(lake.x == 1350);
+    REQUIRE(lake.y == 997);
 }
 
 } // namespace

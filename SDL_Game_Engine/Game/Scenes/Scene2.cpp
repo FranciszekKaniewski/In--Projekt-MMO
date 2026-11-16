@@ -57,15 +57,10 @@ private:
     bool sentMovement = false;
     RequestId pendingLeave = 0;
 
-    math::Vector2 clampToMap(math::Vector2 position) const {
-        const auto size = map.worldSize();
-        return {std::clamp(position.x, 10.0f, size.x - 10.0f),
-                std::clamp(position.y, 5.0f, size.y - 5.0f)};
-    }
-
     void predict(math::Vector2 direction) {
         if(direction.lengthSquared() > 0) {
-            predicted = clampToMap(predicted + direction.normalized() * (movementSpeed * movementStep));
+            const auto destination = predicted + direction.normalized() * (movementSpeed * movementStep);
+            predicted = map.moveBox(predicted, destination, playerHitboxHalfSize);
             predictedFacing = movementFacing(direction);
         }
     }
@@ -139,7 +134,8 @@ private:
                 position += first.velocity * static_cast<float>(ahead * worldStep);
                 moving = moving && ahead < 1.0;
             }
-            world.getComponent<TransformComponent>(entity).position = clampToMap(position);
+            world.getComponent<TransformComponent>(entity).position =
+                map.moveBox(first.position, position, playerHitboxHalfSize);
             auto& movement = world.getComponent<MovementComponent>(entity);
             // Keep the walk clip playing through a brief gap in received movement.
             remote.walkRemaining = moving ? walkAnimationGrace : std::max(0.0f, remote.walkRemaining - elapsed);
@@ -173,8 +169,9 @@ public:
             world.removeComponent<VelocityComponent>(player);
         } else {
             auto& bounds = world.addComponent<MovementBoundsComponent>(player);
-            bounds.minimum = map.position + math::Vector2{10.0f, 5.0f};
-            bounds.maximum = map.position + mapSize - math::Vector2{10.0f, 5.0f};
+            bounds.minimum = map.position + playerHitboxHalfSize;
+            bounds.maximum = map.position + mapSize - playerHitboxHalfSize;
+            bounds.map = &map;
         }
 
         // Camera and character belong to the same entity; this scene only composes them.
@@ -247,7 +244,8 @@ protected:
             sentMovement = wantsToMove;
         }
         correction *= std::max(0.0f, 1.0f - elapsed / correctionDuration);
-        world.getComponent<TransformComponent>(player).position = clampToMap(predicted + correction);
+        world.getComponent<TransformComponent>(player).position =
+            map.moveBox(predicted, predicted + correction, playerHitboxHalfSize);
         auto& movement = world.getComponent<MovementComponent>(player);
         movement.facing = predictedFacing;
         movement.moving = (predicted - before).lengthSquared() > 0;
@@ -255,6 +253,7 @@ protected:
 
     void renderWorld(App& app) override {
         map.draw(app.renderer, camera());
+        renderMapColliderDebug(map, app.renderer, app.devMode, camera());
     }
 
     void handleWorldEvents(App& app, SDL_Event &event) override {

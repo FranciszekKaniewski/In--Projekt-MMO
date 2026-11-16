@@ -40,7 +40,7 @@ ecs::Entity spawnPlayer(ecs::Registry& world, math::Vector2 position) {
     world.addComponent<VelocityComponent>(player);
     world.addComponent<MovementInputComponent>(player);
     world.addComponent<MovementComponent>(player);
-    world.addComponent<ColliderComponent>(player, ColliderComponent::box({20.0f, 10.0f}));
+    world.addComponent<ColliderComponent>(player, ColliderComponent::box(playerHitboxHalfSize * 2.0f));
 
     auto& clips = world.addComponent<DirectionalAnimationComponent>(player);
     clips.idle = {idle, 64, 64, 12, 0.125, {{3, 6, 5, 4, 7, 2, 1, 0}}};

@@ -162,6 +162,9 @@ Własność postaci jest sprawdzana z użyciem identyfikatora konta z sesji poł
 z udostępnionego TMJ i monitoruje procesy połączeń. Trwałe dane postaci
 odczytuje `server_characters`.
 
+Schemat kont użytkowników i instrukcja migracji znajdują się w
+[db/README.md](db/README.md). Pierwsza migracja tworzy tabelę `public.users`.
+
 ## Moduł, proces i gen_server
 
 Moduł to plik z funkcjami, np. `server_connection.erl`. Proces to uruchomiona,

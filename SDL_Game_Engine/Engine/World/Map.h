@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 struct CameraComponent;
 
@@ -19,6 +20,7 @@ public:
     bool load(const std::filesystem::path& jsonPath,
               const std::filesystem::path& imageOverride = {});
     bool loadTilemap(std::string_view json, const std::filesystem::path& localAtlas);
+    math::Vector2 moveBox(math::Vector2 from, math::Vector2 destination, math::Vector2 halfSize) const;
     void draw(SDL_Renderer* renderer, const CameraComponent* camera = nullptr) const;
     void clear() noexcept;
 
@@ -30,6 +32,7 @@ public:
     int columns() const noexcept { return cellWidth ? imageWidth / cellWidth : 0; }
     int rows() const noexcept { return cellHeight ? imageHeight / cellHeight : 0; }
     std::size_t tileCount() const noexcept { return cellCount; }
+    const std::vector<bool>& collisionTiles() const noexcept { return blockedTiles; }
     math::Vector2 worldSize() const noexcept { return {imageWidth * scale, imageHeight * scale}; }
     const std::string& error() const noexcept { return lastError; }
 
@@ -40,5 +43,6 @@ private:
     int imageWidth = 0, imageHeight = 0;
     int cellWidth = 0, cellHeight = 0;
     std::size_t cellCount = 0;
+    std::vector<bool> blockedTiles;
     std::string lastError;
 };

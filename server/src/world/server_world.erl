@@ -6,13 +6,14 @@
 -define(TICK_RATE, 30).
 -define(INPUT_RATE, 60).
 -define(STEP, (160.0 / ?INPUT_RATE)).
+-define(PLAYER_HALF_SIZE, {10.0, 5.0}).
 -define(MAX_PENDING_INPUTS, 32).
 %% The full JSON snapshot, including Unicode names and bigint IDs, fits one 4 KiB frame.
 -define(MAX_PLAYERS_PER_MAP, 10).
 
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-enter(UserId, #{id := Id, map_key := Map} = Character, Bounds) ->
-    case gen_server:call(?MODULE, {reserve, UserId, Character, Bounds}) of
+enter(UserId, #{id := Id, map_key := Map} = Character, Geometry) ->
+    case gen_server:call(?MODULE, {reserve, UserId, Character, Geometry}) of
         {ok, Ref} ->
             %% Read after reserving the character, so an older session's checkpoint has finished.
             case server_characters:find_owned(UserId, Id) of
@@ -39,7 +40,7 @@ init([]) ->
     schedule_tick(Start, 1),
     {ok, {0, Start, #{}}}.
 
-handle_call({reserve, UserId, #{id := Id, map_key := Map} = Character, Bounds}, {Pid, _},
+handle_call({reserve, UserId, #{id := Id, map_key := Map} = Character, Geometry}, {Pid, _},
             {Tick, Start, Players} = State) ->
     Entries = maps:values(Players),
     AlreadyActive = lists:any(fun(#{character := #{id := OtherId}}) -> OtherId =:= Id end, Entries),
@@ -51,15 +52,21 @@ handle_call({reserve, UserId, #{id := Id, map_key := Map} = Character, Bounds}, 
         {_, _, Count} when Count >= ?MAX_PLAYERS_PER_MAP -> {reply, {error, world_full}, State};
         _ ->
             Ref = erlang:monitor(process, Pid),
-            Player = #{ref => Ref, user_id => UserId, character => Character, bounds => Bounds,
+            Player = #{ref => Ref, user_id => UserId, character => Character, geometry => Geometry,
                        inputs => queue:new(), received => 0, applied => 0, waiting => false, status => reserved},
             {reply, {ok, Ref}, {Tick, Start, Players#{Pid => Player}}}
     end;
 handle_call({activate, Ref, Character}, {Pid, _}, {Tick, Start, Players}) ->
-    #{ref := Ref, bounds := Bounds, status := reserved} = Player = maps:get(Pid, Players),
-    Spawn = advance(Character, Bounds, {0, 0}),
-    Active = Player#{character := Spawn, status := active},
-    {reply, {ok, Ref, maps:without([moving, vx, vy], Spawn)}, {Tick, Start, Players#{Pid := Active}}};
+    #{ref := Ref, geometry := Geometry, status := reserved} = Player = maps:get(Pid, Players),
+    #{position_x := X, position_y := Y} = Character,
+    case server_maps:spawn_position(Geometry, {X, Y}, ?PLAYER_HALF_SIZE) of
+        {ok, {SpawnX, SpawnY}} ->
+            Spawn = Character#{position_x := SpawnX, position_y := SpawnY},
+            Active = Player#{character := Spawn#{moving => false, vx => 0.0, vy => 0.0}, status := active},
+            {reply, {ok, Ref, Spawn}, {Tick, Start, Players#{Pid := Active}}};
+        {error, _} = Error ->
+            {reply, Error, {Tick, Start, remove_player(Pid, Ref, Players)}}
+    end;
 handle_call({cancel, Ref}, {Pid, _}, {Tick, Start, Players}) ->
     #{ref := Ref, status := reserved} = maps:get(Pid, Players),
     {reply, ok, {Tick, Start, remove_player(Pid, Ref, Players)}};
@@ -177,13 +184,13 @@ schedule_tick(Start, Tick) ->
     erlang:send_after(Start + Tick * 1000 div ?TICK_RATE, self(), tick, [{abs, true}]).
 now_ms() -> erlang:monotonic_time(millisecond).
 
-step(#{status := active, character := Character, bounds := Bounds, inputs := Inputs} = Player) ->
+step(#{status := active, character := Character, geometry := Geometry, inputs := Inputs} = Player) ->
     case queue:out(Inputs) of
         {{value, {Sequence, X, Y}}, Rest} ->
-            Next = advance(Character, Bounds, {X, Y}),
+            Next = advance(Character, Geometry, {X, Y}),
             case queue:out(Rest) of
                 {{value, {SecondSequence, SecondX, SecondY}}, Remaining} ->
-                    Player#{character := advance(Next, Bounds, {SecondX, SecondY}),
+                    Player#{character := advance(Next, Geometry, {SecondX, SecondY}),
                             inputs := Remaining, applied := SecondSequence};
                 {empty, _} -> Player#{character := Next, inputs := Rest, applied := Sequence}
             end;
@@ -192,10 +199,10 @@ step(#{status := active, character := Character, bounds := Bounds, inputs := Inp
     end;
 step(Player) -> Player.
 
-advance(#{position_x := X, position_y := Y, facing := Facing} = Character, {Width, Height}, {Dx, Dy}) ->
+advance(#{position_x := X, position_y := Y, facing := Facing} = Character, Geometry, {Dx, Dy}) ->
     Step = case Dx * Dx + Dy * Dy of 2 -> ?STEP / math:sqrt(2); _ -> ?STEP end,
-    NextX = min(max(X + Dx * Step, 10.0), Width - 10.0),
-    NextY = min(max(Y + Dy * Step, 5.0), Height - 5.0),
+    Destination = {X + Dx * Step, Y + Dy * Step},
+    {NextX, NextY} = server_maps:move(Geometry, {X, Y}, Destination, ?PLAYER_HALF_SIZE),
     Character#{position_x := NextX, position_y := NextY, facing := facing(Dx, Dy, Facing),
                moving => NextX /= X orelse NextY /= Y,
                vx => (NextX - X) * ?INPUT_RATE, vy => (NextY - Y) * ?INPUT_RATE}.

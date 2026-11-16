@@ -1,11 +1,13 @@
 #include "MovementSystem.h"
 
 #include "ECS.h"
+#include "Components/ColliderComponent.h"
 #include "Components/MovementBoundsComponent.h"
 #include "Components/MovementComponent.h"
 #include "Components/MovementInputComponent.h"
 #include "Components/TransformComponent.h"
 #include "Components/VelocityComponent.h"
+#include "../World/Map.h"
 
 #include <algorithm>
 #include <cmath>
@@ -54,6 +56,15 @@ void updateMovement(ecs::Registry& world, float deltaTime) {
                 bounds->minimum.x <= bounds->maximum.x && bounds->minimum.y <= bounds->maximum.y) {
                 next.x = std::clamp(next.x, bounds->minimum.x, bounds->maximum.x);
                 next.y = std::clamp(next.y, bounds->minimum.y, bounds->maximum.y);
+            }
+
+            if (bounds && bounds->map) {
+                const auto* collider = world.tryGetComponent<ColliderComponent>(entity);
+                if (collider && collider->enabled && collider->shape == ColliderComponent::Shape::Box) {
+                    const auto center = transform.position + collider->offset;
+                    next = bounds->map->moveBox(center, next + collider->offset, collider->size * 0.5f)
+                           - collider->offset;
+                }
             }
 
             if (movement) {

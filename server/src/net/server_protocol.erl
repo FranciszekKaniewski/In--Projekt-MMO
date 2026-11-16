@@ -69,7 +69,7 @@ dispatch(<<"select_character">>, Message, #{user := #{id := UserId}} = State) ->
             case server_characters:find_owned(UserId, Id) of
                 {ok, Character} ->
                     {#{<<"type">> => <<"character_selected">>, <<"character">> => Character},
-                     maps:remove(map_bounds, State#{character_id => Id, character => Character})};
+                     maps:remove(map_geometry, State#{character_id => Id, character => Character})};
                 {error, Code} -> {error_message(Code), State}
             end;
         false -> {error_message(invalid_message), State}
@@ -77,18 +77,19 @@ dispatch(<<"select_character">>, Message, #{user := #{id := UserId}} = State) ->
 dispatch(<<"get_map">>, _, #{character := #{map_key := MapKey}} = State) ->
     case server_maps:read(MapKey) of
         {ok, Bytes} ->
-            case server_maps:bounds(Bytes) of
-                {ok, Bounds} ->
+            case server_maps:geometry(Bytes) of
+                {ok, Geometry} ->
                     Header = #{<<"type">> => <<"map_data">>, <<"map_key">> => MapKey,
                                <<"size">> => byte_size(Bytes)},
-                    {{map_data, Header, Bytes}, State#{map_bounds => Bounds}};
+                    {{map_data, Header, Bytes}, State#{map_geometry => Geometry}};
                 {error, Code} -> {error_message(Code), State}
             end;
         {error, Code} -> {error_message(Code), State}
     end;
 dispatch(<<"get_map">>, _, State) -> {error_message(character_required), State};
-dispatch(<<"enter_world">>, _, #{user := #{id := UserId}, character := Character, map_bounds := Bounds} = State) ->
-    case server_world:enter(UserId, Character, Bounds) of
+dispatch(<<"enter_world">>, _, #{user := #{id := UserId}, character := Character,
+                                 map_geometry := Geometry} = State) ->
+    case server_world:enter(UserId, Character, Geometry) of
         {ok, Ref, Spawn} ->
             {#{type => <<"world_joined">>, character => Spawn}, State#{world_ref => Ref}};
         {error, Code} -> {error_message(Code), State}
@@ -150,7 +151,7 @@ clear_session(#{world_ref := _} = State) ->
     server_world:detach(),
     clear_session(maps:remove(world_ref, State));
 clear_session(State) ->
-    maps:without([character, map_bounds],
+    maps:without([character, map_geometry],
                  State#{user => undefined, character_id => undefined, session_deadline => undefined}).
 
 leave_world(#{world_ref := _} = State) ->

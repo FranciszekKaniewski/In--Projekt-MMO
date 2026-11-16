@@ -12,6 +12,8 @@ auth_database_test_() ->
                   {"character lists are paginated and scoped to the account", fun() -> pages(Port) end},
                   {"world simulates and broadcasts movement to both players", {timeout, 15,
                      fun() -> world_movement(Port) end}},
+                  {"world stops at water and lets the player move along the shore",
+                   fun() -> world_water_collision(Port) end},
                   {"chat reaches players across maps with the server's sender identity", {timeout, 15,
                      fun() -> world_chat(Port) end}},
                   {"database connection recovers after disconnect", fun() -> reconnect_db() end},
@@ -222,12 +224,36 @@ world_movement(Port) ->
         ?assert(positions_match({1350 + 4 * 160 / 60, 1320.0}, stored_position(AId)))
     end).
 
+world_water_collision(Port) ->
+    server_test_support:with_client(Port, fun(Socket) ->
+        Id = world_character(Socket, unique(<<"shore">>)),
+        {ok, 1} = server_db:query(
+            "UPDATE public.characters SET position_x = $1, position_y = $2 WHERE id = $3",
+            [2357.0, 1320.0, Id]),
+        Character = join_chat_world(Socket, <<"map_expanded">>),
+        ?assertEqual({2357.0, 1320.0}, world_position(Character)),
+        ?assertEqual({2358.0, 1320.0}, world_position(move_and_wait(Socket, Id, 1, 1, 0))),
+        Blocked = move_and_wait(Socket, Id, 2, 1, 0),
+        ?assertEqual({2358.0, 1320.0}, world_position(Blocked)),
+        ?assertEqual(false, maps:get(<<"moving">>, Blocked)),
+        ?assertEqual(0.0, maps:get(<<"vx">>, Blocked)),
+        ?assertMatch(#{<<"type">> := <<"world_left">>},
+                     world_request(Socket, #{type => <<"leave_world">>})),
+        ?assertEqual({2358.0, 1320.0}, stored_position(Id)),
+        #{<<"type">> := <<"world_joined">>} = request(Socket, <<"enter_world">>),
+        {2358.0, Y} = world_position(move_and_wait(Socket, Id, 1, 1, 1)),
+        ?assert(Y > 1320.0)
+    end).
+
 move_diagonally(Socket, Id) ->
-    ok = ssl:send(Socket, json:encode(#{type => <<"move_input">>, seq => 1, dx => 1, dy => 1})),
+    world_position(move_and_wait(Socket, Id, 1, 1, 1)).
+
+move_and_wait(Socket, Id, Seq, X, Y) ->
+    ok = ssl:send(Socket, json:encode(#{type => <<"move_input">>, seq => Seq, dx => X, dy => Y})),
     Players = await_world(Socket, fun(Rows) ->
-        maps:get(<<"input_ack">>, maps:get(Id, Rows)) =:= 1
+        maps:get(<<"input_ack">>, maps:get(Id, Rows, #{}), 0) =:= Seq
     end, 20),
-    world_position(maps:get(Id, Players)).
+    maps:get(Id, Players).
 
 world_position(#{<<"position_x">> := X, <<"position_y">> := Y}) -> {X, Y}.
 
