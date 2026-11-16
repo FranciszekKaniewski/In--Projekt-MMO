@@ -224,7 +224,7 @@ TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "
             {"imagewidth", 4}, {"imageheight", 4}}})},
         {"layers", Json::array({layer({1, 2, 0, 0}, true), layer({0, 3, 0, 4}, true),
                                  layer({4, 4, 4, 4}, false)})}};
-    auto collision = layer({0, 1, 0, 0}, true);
+    auto collision = layer({0, 1, 1, 1}, true);
     collision["name"] = "Collision";
     data["layers"].push_back(collision);
     Map map;
@@ -252,6 +252,9 @@ TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "
     REQUIRE(canvas.isColorAt(2, 1, green));
     REQUIRE_FALSE(canvas.isColorAt(3, 1, green));
     REQUIRE_FALSE(canvas.isColorAt(0, 1, green));
+    REQUIRE(canvas.isColorAt(1, 3, green)); // Bottom row spans both tiles.
+    REQUIRE(canvas.isColorAt(4, 2, green)); // Adjacent blocked tiles retain their shared grid line.
+    REQUIRE(canvas.isColorAt(4, 3, green));
     float scaleX = 0.0f, scaleY = 0.0f;
     SDL_RenderGetScale(App::renderer, &scaleX, &scaleY);
     REQUIRE(scaleX == 0.5f);
@@ -264,6 +267,13 @@ TEST_CASE_METHOD(MapSDLFixture, "Tilemaps compose layers from a shared atlas", "
     REQUIRE_FALSE(map.loadTilemap(data.dump(), localAtlas));
     REQUIRE(map.isLoaded());
     REQUIRE(map.tileCount() == 4);
+
+    data["layers"][0]["data"][0] = 1;
+    data["layers"].erase(data["layers"].size() - 1);
+    REQUIRE(map.loadTilemap(data.dump(), localAtlas));
+    canvas.clear();
+    renderMapColliderDebug(map, App::renderer, true, &camera);
+    REQUIRE_FALSE(canvas.isColorAt(2, 1, green));
 }
 
 TEST_CASE_METHOD(MapSDLFixture, "Both supplied TMJ maps load with the game tileset", "[integration][map]") {
@@ -278,8 +288,10 @@ TEST_CASE_METHOD(MapSDLFixture, "Both supplied TMJ maps load with the game tiles
     REQUIRE(exampleShore.y == 640);
     REQUIRE(map.load(std::filesystem::path(serverMaps) / "Map_expanded.tmj"));
     REQUIRE(map.width() == 2560);
-    REQUIRE(map.tileWidth() == 16);
-    REQUIRE(map.tileCount() == 25600);
+    REQUIRE(map.height() == 2560);
+    REQUIRE(map.tileWidth() == 32);
+    REQUIRE(map.tileHeight() == 32);
+    REQUIRE(map.tileCount() == 6400);
     const auto shore = map.moveBox({1350, 1320}, {2560, 1320}, {10, 5});
     REQUIRE(shore.x == 2358);
     REQUIRE(shore.y == 1320);

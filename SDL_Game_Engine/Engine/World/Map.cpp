@@ -26,6 +26,24 @@ int integer(const Json& object, const char* key, int minimum) {
     }
     return value.get<int>();
 }
+
+Map::CollisionRuns buildCollisionRuns(const std::vector<bool>& blocked, int lines, int cells,
+                                      int lineStride, int cellStride) {
+    if (blocked.empty()) return {};
+    Map::CollisionRuns result(lines);
+    for (int line = 0; line < lines; ++line) {
+        auto& runs = result[line];
+        for (int cell = 0; cell < cells; ++cell) {
+            if (!blocked[line * lineStride + cell * cellStride]) continue;
+            if (!runs.empty() && runs.back().end == cell) {
+                ++runs.back().end;
+            } else {
+                runs.push_back({cell, cell + 1});
+            }
+        }
+    }
+    return result;
+}
 }
 
 bool Map::load(const std::filesystem::path& jsonPath, const std::filesystem::path& imageOverride) {
@@ -104,6 +122,8 @@ bool Map::load(const std::filesystem::path& jsonPath, const std::filesystem::pat
         cellHeight = tileHeight;
         cellCount = frames.size();
         blockedTiles.clear();
+        horizontalRuns.clear();
+        verticalRuns.clear();
         lastError.clear();
         return true;
     } catch (const std::exception& exception) {
@@ -224,6 +244,10 @@ void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
     std::shared_ptr<SDL_Texture> replacement(SDL_CreateTextureFromSurface(App::renderer, image.get()), SDL_DestroyTexture);
     if (!replacement || SDL_SetTextureScaleMode(replacement.get(), SDL_ScaleModeNearest) != 0 ||
         SDL_SetTextureBlendMode(replacement.get(), SDL_BLENDMODE_BLEND) != 0) throw std::runtime_error(SDL_GetError());
+
+    // Adjacent blocked cells share straight runs of horizontal and vertical outline segments.
+    auto newHorizontalRuns = buildCollisionRuns(collision, rows, columns, columns, 1);
+    auto newVerticalRuns = buildCollisionRuns(collision, columns, rows, 1, columns);
     texture = std::move(replacement);
     imageWidth = width;
     imageHeight = height;
@@ -231,6 +255,8 @@ void Map::setTilemap(std::string_view json, const std::filesystem::path& path,
     cellHeight = tileHeight;
     cellCount = count;
     blockedTiles = std::move(collision);
+    horizontalRuns = std::move(newHorizontalRuns);
+    verticalRuns = std::move(newVerticalRuns);
     lastError.clear();
 }
 
@@ -325,5 +351,7 @@ void Map::clear() noexcept {
     imageWidth = imageHeight = cellWidth = cellHeight = 0;
     cellCount = 0;
     blockedTiles.clear();
+    horizontalRuns.clear();
+    verticalRuns.clear();
     lastError.clear();
 }

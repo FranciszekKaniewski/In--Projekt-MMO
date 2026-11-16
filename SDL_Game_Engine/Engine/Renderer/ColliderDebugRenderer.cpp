@@ -91,8 +91,7 @@ void drawPolygon(SDL_Renderer* renderer, math::Vector2 origin,
 
 void renderMapColliderDebug(const Map& map, SDL_Renderer* renderer, bool devMode,
                             const CameraComponent* camera) {
-    const auto& blocked = map.collisionTiles();
-    if (!devMode || !renderer || !map.isLoaded() || blocked.empty()) return;
+    if (!devMode || !renderer || !map.isLoaded() || map.collisionRows().empty()) return;
 
     const auto size = map.worldSize();
     const SDL_FRect bounds{map.position.x, map.position.y, size.x, size.y};
@@ -101,8 +100,7 @@ void renderMapColliderDebug(const Map& map, SDL_Renderer* renderer, bool devMode
 
     const auto tileSize = math::Vector2{map.tileWidth() * map.scale, map.tileHeight() * map.scale};
     const auto origin = camera ? map.position - camera->position : map.position;
-    const int columns = map.columns();
-    int firstColumn = 0, firstRow = 0, endColumn = columns, endRow = map.rows();
+    int firstColumn = 0, firstRow = 0, endColumn = map.columns(), endRow = map.rows();
     if (camera) {
         // Restrict the grid to cells intersecting the camera, including partially visible cells.
         firstColumn = static_cast<int>(std::floor(std::clamp(-origin.x / tileSize.x, 0.0f, float(endColumn))));
@@ -115,17 +113,44 @@ void renderMapColliderDebug(const Map& map, SDL_Renderer* renderer, bool devMode
 
     const ScopedDrawColor drawColor(renderer);
     const ScopedDrawScale drawScale(renderer);
+    const auto pixelOrigin = project(origin, drawScale.scale);
     const auto tilePixels = project(tileSize, drawScale.scale);
-    std::vector<SDL_FRect> outlines;
-    for (int row = firstRow; row < endRow; ++row) {
-        for (int column = firstColumn; column < endColumn; ++column) {
-            if (!blocked[row * columns + column]) continue;
-            const auto corner = project(origin + math::Vector2{column * tileSize.x, row * tileSize.y},
-                                        drawScale.scale);
-            outlines.push_back({corner.x, corner.y, tilePixels.x, tilePixels.y});
+    std::array<SDL_FRect, 512> edges;
+    int edgeCount = 0;
+    const auto flush = [&] {
+        if (edgeCount > 0) SDL_RenderFillRectsF(renderer, edges.data(), edgeCount);
+        edgeCount = 0;
+    };
+    const auto addEdge = [&](float along, float across, float length, bool horizontal) {
+        edges[edgeCount++] = horizontal ? SDL_FRect{along, across, length, 1.0f}
+                                       : SDL_FRect{across, along, 1.0f, length};
+        if (edgeCount == static_cast<int>(edges.size())) flush();
+    };
+
+    // Draw the cached runs as one-pixel strips so SDL batches the straight edges.
+    const auto drawRuns = [&](const Map::CollisionRuns& lines, int firstLine, int endLine,
+                              int firstCell, int endCell, bool horizontal) {
+        const float alongOrigin = horizontal ? pixelOrigin.x : pixelOrigin.y;
+        const float acrossOrigin = horizontal ? pixelOrigin.y : pixelOrigin.x;
+        const float alongStep = horizontal ? tilePixels.x : tilePixels.y;
+        const float acrossStep = horizontal ? tilePixels.y : tilePixels.x;
+        for (int line = firstLine; line < endLine; ++line) {
+            const float across = acrossOrigin + line * acrossStep;
+            for (const auto& run : lines[line]) {
+                if (run.begin >= endCell) break;
+                const int begin = std::max(firstCell, run.begin);
+                const int end = std::min(endCell, run.end);
+                if (begin >= end) continue;
+                const float along = alongOrigin + begin * alongStep;
+                const float length = std::max(1.0f, (end - begin) * alongStep);
+                addEdge(along, across, length, horizontal);
+                if (acrossStep > 1.0f) addEdge(along, across + acrossStep - 1.0f, length, horizontal);
+            }
         }
-    }
-    if (!outlines.empty()) SDL_RenderDrawRectsF(renderer, outlines.data(), static_cast<int>(outlines.size()));
+    };
+    drawRuns(map.collisionRows(), firstRow, endRow, firstColumn, endColumn, true);
+    drawRuns(map.collisionColumns(), firstColumn, endColumn, firstRow, endRow, false);
+    flush();
 }
 
 void renderColliderDebug(ecs::Registry& world, SDL_Renderer* renderer, bool devMode,

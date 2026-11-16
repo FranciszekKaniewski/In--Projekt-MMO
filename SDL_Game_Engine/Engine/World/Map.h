@@ -14,6 +14,12 @@ struct CameraComponent;
 
 class Map {
 public:
+    struct CollisionRun {
+        int begin;
+        int end;
+    };
+    using CollisionRuns = std::vector<std::vector<CollisionRun>>;
+
     math::Vector2 position{};
     float scale = 1.0f;
 
@@ -32,7 +38,8 @@ public:
     int columns() const noexcept { return cellWidth ? imageWidth / cellWidth : 0; }
     int rows() const noexcept { return cellHeight ? imageHeight / cellHeight : 0; }
     std::size_t tileCount() const noexcept { return cellCount; }
-    const std::vector<bool>& collisionTiles() const noexcept { return blockedTiles; }
+    const CollisionRuns& collisionRows() const noexcept { return horizontalRuns; }
+    const CollisionRuns& collisionColumns() const noexcept { return verticalRuns; }
     math::Vector2 worldSize() const noexcept { return {imageWidth * scale, imageHeight * scale}; }
     const std::string& error() const noexcept { return lastError; }
 
@@ -44,5 +51,7 @@ private:
     int cellWidth = 0, cellHeight = 0;
     std::size_t cellCount = 0;
     std::vector<bool> blockedTiles;
+    CollisionRuns horizontalRuns;
+    CollisionRuns verticalRuns;
     std::string lastError;
 };
