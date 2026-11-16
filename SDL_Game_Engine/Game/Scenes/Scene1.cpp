@@ -1,5 +1,6 @@
 #include "../../Engine/Scenes/UIScene.h"
 #include "../../Engine/Scenes/SceneManager.h"
+#include <iostream>
 #include <utility>
 
 class UIScene1 : public UIScene {
@@ -29,8 +30,9 @@ class UIScene1 : public UIScene {
             passwordInput->setText("");
             status->updateText(u8"Łączenie z serwerem...");
             setBusy(true);
-        } catch(const std::exception&) {
-            status->updateText(serverErrorText("connection_failed"));
+        } catch(const std::exception& error) {
+            std::cerr << error.what() << '\n';
+            status->updateText(u8"Sprawdź konfigurację połączenia w pliku .env.");
         }
     }
 

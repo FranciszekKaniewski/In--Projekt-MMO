@@ -45,7 +45,6 @@ public:
     bool devMode = false;
     GameSettings settings;
     AudioManager audio;
-    ServerConfig serverSettings;
     std::unique_ptr<GameClient> serverClient;
     std::string loginMessage;
 

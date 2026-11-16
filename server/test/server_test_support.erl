@@ -7,9 +7,12 @@ start(Overrides) ->
     Defaults = [{ip, {127, 0, 0, 1}}, {port, 0},
                 {tls_certfile, filename:absname("test/fixtures/server.crt")},
                 {tls_keyfile, filename:absname("test/fixtures/server.key")},
-                {auth_timeout_ms, 60000}],
+                {db_options, #{}}],
+    {Connection, Settings} = lists:partition(fun({Key, _}) -> lists:keymember(Key, 1, Defaults) end,
+                                              Overrides),
+    ok = application:set_env(server, connection_overrides, maps:from_list(Defaults ++ Connection)),
     lists:foreach(fun({K, V}) -> application:set_env(server, K, V) end,
-                  Defaults ++ Overrides),
+                  [{auth_timeout_ms, 60000} | Settings]),
     {ok, _} = application:ensure_all_started(server),
     {server_listener:port(), Previous}.
 

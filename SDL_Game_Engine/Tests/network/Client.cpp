@@ -24,15 +24,11 @@ ServerReply await(GameClient& client, RequestId id) {
 }
 
 int wmain(int argc, wchar_t** argv) {
-    if(argc != 5) return 2;
+    if(argc != 3) return 2;
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> utf8;
-    const auto mode = utf8.to_bytes(argv[4]);
+    const auto mode = utf8.to_bytes(argv[2]);
     try {
-        ServerConfig config;
-        config.port = static_cast<std::uint16_t>(std::stoi(argv[1]));
-        config.host = utf8.to_bytes(argv[2]); config.caFile = utf8.to_bytes(argv[3]);
-        if(mode == "timeout") config.timeoutMs = 350;
-        auto client = makeGameClient(config);
+        auto client = makeGameClient(loadServerConfig(argv[1]));
         const auto start = std::chrono::steady_clock::now();
         auto id = client->login("tester", "Pass123!");
         require(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(100), "Login blocks the UI");

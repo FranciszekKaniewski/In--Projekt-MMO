@@ -19,7 +19,6 @@ build:
 	@xcopy /E /I /H /Y "Game\Assets" "build\Assets" >nul
 	@if not exist "build\Config" mkdir "build\Config"
 	@if not exist "build\Config\settings.json" copy /Y "Game\Config\settings.json" "build\Config\settings.json" >nul
-	@if exist "..\server\priv\tls\ca.crt" copy /Y "..\server\priv\tls\ca.crt" "build\Config\server-ca.crt" >nul
 	$(CXX) $(CXXFLAGS) -o build/SDL_Game_Engine.exe main.cpp $(ENGINE) $(GAME) -lmingw32 -L Vendor/SDL2/lib -lSDL2main $(SDL_LIBS)
 
 run:
@@ -69,9 +68,9 @@ test-e2e: build/tests/e2e/tests.exe
 	@xcopy /E /I /H /Y "Game\Config" "build\tests\e2e\Config" >nul
 	cd build\tests\e2e && tests.exe $(FILTER) --colour-mode none
 
-build/tests/network/client.exe: Tests/network/Client.cpp Engine/Network/GameClient.cpp Engine/Network/TlsConnection.cpp $(HEADERS)
+build/tests/network/client.exe: Tests/network/Client.cpp Engine/Network/GameClient.cpp Engine/Network/TlsConnection.cpp Engine/Network/ServerConfig.cpp $(HEADERS)
 	@if not exist "build\tests\network" mkdir "build\tests\network"
-	$(CXX) $(CXXFLAGS) -Wall -Wextra -Wpedantic -municode -o $@ Tests/network/Client.cpp Engine/Network/GameClient.cpp Engine/Network/TlsConnection.cpp -lws2_32 -lsecur32 -lcrypt32
+	$(CXX) $(CXXFLAGS) -Wall -Wextra -Wpedantic -municode -o $@ $(filter %.cpp,$^) -lws2_32 -lsecur32 -lcrypt32
 
 test-network: build/tests/network/client.exe
 	python Tests/network/run.py

@@ -25,10 +25,13 @@ App::~App() {
 
 GameClient& App::gameClient() {
     if(!serverClient) {
-        auto config = serverSettings;
-        const auto directory = configFilePath.empty() ? std::filesystem::path("Config") : configFilePath.parent_path();
-        config.caFile = (directory / std::filesystem::u8path(config.caFile)).lexically_normal().u8string();
-        serverClient = makeGameClient(std::move(config));
+        const auto directory = configFilePath.parent_path().parent_path();
+        auto envPath = directory / ".env";
+        if(!std::filesystem::exists(envPath)) {
+            const auto devEnv = (directory / "../../server/.env").lexically_normal();
+            if(std::filesystem::exists(devEnv)) envPath = devEnv;
+        }
+        serverClient = makeGameClient(loadServerConfig(envPath));
     }
     return *serverClient;
 }
@@ -48,7 +51,6 @@ void App::init(const char* configPath) {
     }
 
     this->title = cfg.window.title;
-    serverSettings = cfg.server;
     settings.volume = std::clamp(cfg.audio.volume, 0, 100);
     settings.muted = cfg.audio.muted;
     settings.fpsLimit = std::max(0, cfg.game.fps);
@@ -379,8 +381,7 @@ void App::clean() {
             const AppConfig cfg = {
                 {title, settings.width, settings.height, settings.fullscreen},
                 {std::max(0, settings.fpsLimit), devMode},
-                {std::clamp(settings.volume, 0, 100), settings.muted},
-                serverSettings
+                {std::clamp(settings.volume, 0, 100), settings.muted}
             };
             saveConfig(configFilePath, cfg);
         } catch (const std::exception& e) {

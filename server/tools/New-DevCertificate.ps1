@@ -1,14 +1,36 @@
-param([string]$OutputDirectory = (Join-Path $PSScriptRoot '../priv/tls'))
+[CmdletBinding()]
+param()
 
 $ErrorActionPreference = 'Stop'
-$taskCertificateDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$taskCertificatePath = Join-Path $taskCertificateDirectory 'server.crt'
-$taskKeyPath = Join-Path $taskCertificateDirectory 'server.key'
-$taskCaPath = Join-Path $taskCertificateDirectory 'ca.crt'
-if ((Test-Path -LiteralPath $taskCertificatePath) -or (Test-Path -LiteralPath $taskKeyPath) -or (Test-Path -LiteralPath $taskCaPath)) {
-    throw 'Certificate or key already exists. Choose a new output directory.'
+$taskServerDirectory = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$taskDotenvPath = Join-Path $taskServerDirectory '.env'
+$taskEnv = @{}
+foreach ($taskLine in (Get-Content -LiteralPath $taskDotenvPath -Encoding utf8)) {
+    if ($taskLine -cmatch '^\s*(GAME_HOST|GAME_TLS_CERTFILE|GAME_TLS_KEYFILE|GAME_CAFILE)\s*=(.*)$') {
+        $taskName = $Matches[1]
+        $taskValue = $Matches[2].Trim()
+        if ($taskValue -match '^(["''])(.*)\1$') { $taskValue = $Matches[2] }
+        $taskEnv[$taskName] = $taskValue
+    }
 }
-New-Item -ItemType Directory -Path $taskCertificateDirectory -Force | Out-Null
+foreach ($taskName in @('GAME_HOST', 'GAME_TLS_CERTFILE', 'GAME_TLS_KEYFILE', 'GAME_CAFILE')) {
+    if ([string]::IsNullOrWhiteSpace($taskEnv[$taskName])) {
+        throw "Missing $taskName in $taskDotenvPath."
+    }
+}
+$taskCertificatePath = [System.IO.Path]::GetFullPath($taskEnv.GAME_TLS_CERTFILE, $taskServerDirectory)
+$taskKeyPath = [System.IO.Path]::GetFullPath($taskEnv.GAME_TLS_KEYFILE, $taskServerDirectory)
+$taskCaPath = [System.IO.Path]::GetFullPath($taskEnv.GAME_CAFILE, $taskServerDirectory)
+$taskOutputPaths = @($taskCertificatePath, $taskKeyPath, $taskCaPath)
+if (($taskOutputPaths | Sort-Object -Unique).Count -ne 3) { throw 'TLS output paths must be distinct.' }
+foreach ($taskPath in $taskOutputPaths) {
+    if (Test-Path -LiteralPath $taskPath) {
+        throw "TLS file already exists: $taskPath. Choose a new path in .env."
+    }
+}
+foreach ($taskPath in $taskOutputPaths) {
+    [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($taskPath))
+}
 $taskRsa = [System.Security.Cryptography.RSA]::Create(3072)
 $taskCaRsa = [System.Security.Cryptography.RSA]::Create(3072)
 try {
@@ -31,6 +53,15 @@ try {
     $taskSan.AddDnsName('localhost')
     $taskSan.AddIpAddress([System.Net.IPAddress]::Loopback)
     $taskSan.AddIpAddress([System.Net.IPAddress]::IPv6Loopback)
+    $taskHostAddress = $null
+    if ([System.Net.IPAddress]::TryParse($taskEnv.GAME_HOST, [ref]$taskHostAddress)) {
+        if ($taskHostAddress -ne [System.Net.IPAddress]::Loopback -and
+            $taskHostAddress -ne [System.Net.IPAddress]::IPv6Loopback) {
+            $taskSan.AddIpAddress($taskHostAddress)
+        }
+    } elseif ($taskEnv.GAME_HOST -ne 'localhost') {
+        $taskSan.AddDnsName($taskEnv.GAME_HOST)
+    }
     $taskRequest.CertificateExtensions.Add($taskSan.Build())
     $taskRequest.CertificateExtensions.Add(
         [System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension]::new($false, $false, 0, $true))

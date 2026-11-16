@@ -54,8 +54,8 @@ Polecenia wykonuj z katalogu `server`, gdzie znajdują się `compose.yaml` i `.e
 
 ```powershell
 docker compose up -d --wait db
-Get-Content -Raw -Encoding UTF8 db/migrations/001_create_users.sql | docker compose exec -T db psql -U game_dev -d sdl_game -v ON_ERROR_STOP=1
-Get-Content -Raw -Encoding UTF8 db/migrations/002_create_characters.sql | docker compose exec -T db psql -U game_dev -d sdl_game -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 db/migrations/001_create_users.sql | docker compose exec -T db sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
+Get-Content -Raw -Encoding UTF8 db/migrations/002_create_characters.sql | docker compose exec -T db sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
 ```
 
 Możesz też otworzyć plik migracji w HeidiSQL, połączyć się z bazą `sdl_game`
@@ -78,7 +78,7 @@ Sesja istnieje w pamięci procesu połączenia, więc nie wymaga nowej tabeli.
 ## Sprawdzenie ograniczeń
 
 ```powershell
-Get-Content -Raw -Encoding UTF8 db/tests/001_users.sql | docker compose exec -T db psql -U game_dev -d sdl_game -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 db/tests/001_users.sql | docker compose exec -T db sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
 ```
 
 Test sprawdza automatyczne wartości, wyszukiwanie bez uwzględniania wielkości

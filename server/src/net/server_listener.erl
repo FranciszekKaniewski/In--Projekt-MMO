@@ -11,13 +11,14 @@ port() ->
     gen_server:call(?MODULE, port).
 
 init([]) ->
-    IP = application:get_env(server, ip, {127, 0, 0, 1}),
-    Port = application:get_env(server, port, 4000),
+    {ok, IP} = application:get_env(server, ip),
+    {ok, Port} = application:get_env(server, port),
+    {ok, Certfile} = application:get_env(server, tls_certfile),
+    {ok, Keyfile} = application:get_env(server, tls_keyfile),
     Options = [binary, {ip, IP}, {packet, 4}, {packet_size, 4096},
                {active, false}, {reuseaddr, true}, {nodelay, true},
                {send_timeout, 5000}, {send_timeout_close, true}],
-    TLS = [{certfile, application:get_env(server, tls_certfile, "priv/tls/server.crt")},
-           {keyfile, application:get_env(server, tls_keyfile, "priv/tls/server.key")},
+    TLS = [{certfile, Certfile}, {keyfile, Keyfile},
            {versions, ['tlsv1.2', 'tlsv1.3']}, {verify, verify_none}],
     case ssl:listen(Port, Options ++ TLS) of
         {ok, ListenSocket} ->

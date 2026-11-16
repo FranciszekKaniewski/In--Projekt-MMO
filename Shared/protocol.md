@@ -1,6 +1,6 @@
 # Protokół gry
 
-Transport: TLS 1.2/1.3 nad TCP, domyślnie `127.0.0.1:4000`.
+Transport: TLS 1.2/1.3 nad TCP. Adres nasłuchu i port ustawia `.env`.
 Klient weryfikuje certyfikat serwera i nazwę hosta. Lokalny certyfikat CA
 znajduje się w `server/priv/tls/ca.crt`; przygotowanie opisuje README serwera.
 Każde nowe połączenie rozpoczyna się bez zalogowanego konta.

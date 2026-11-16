@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 import socket
 import ssl
 import struct
@@ -13,33 +12,38 @@ from pathlib import Path
 SERVER_DIR = Path(__file__).resolve().parent.parent
 
 
-def add_connection_arguments(parser):
-    defaults = {}
-    try:
-        for line in (SERVER_DIR / ".env").read_text(encoding="utf-8-sig").splitlines():
-            name, separator, value = line.strip().partition("=")
-            name = name.strip()
-            if not separator or name not in {"GAME_HOST", "GAME_PORT", "GAME_CAFILE"}:
-                continue
-            value = value.strip()
-            if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
-                value = value[1:-1]
-            defaults[name] = value
-    except FileNotFoundError:
-        pass
+def connection_settings():
+    path = SERVER_DIR / ".env"
+    keys = {"GAME_HOST", "GAME_PORT", "GAME_CAFILE", "GAME_TIMEOUT_MS"}
+    values = {}
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        name, separator, value = line.strip().partition("=")
+        name = name.strip()
+        if not separator or name not in keys:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+            value = value[1:-1]
+        values[name] = value
 
-    host = os.environ.get("GAME_HOST", defaults.get("GAME_HOST", "127.0.0.1"))
-    port = os.environ.get("GAME_PORT", defaults.get("GAME_PORT", "4000"))
-    cafile = os.environ.get("GAME_CAFILE", defaults.get("GAME_CAFILE", "priv/tls/ca.crt"))
-    parser.add_argument("--host", default=host)
-    parser.add_argument("--port", type=int, default=port)
-    parser.add_argument("--cafile", type=Path, default=SERVER_DIR / cafile)
+    for key in sorted(keys):
+        if not values.get(key):
+            raise ValueError(f"Brak {key} w {path}")
+    return (values["GAME_HOST"], number(values, "GAME_PORT", 65535),
+            path.parent / values["GAME_CAFILE"], number(values, "GAME_TIMEOUT_MS", 30000) / 1000)
 
 
-def connect(host, port, cafile):
+def number(values, key, maximum):
+    value = values[key]
+    if value.isascii() and value.isdecimal() and 1 <= int(value) <= maximum:
+        return int(value)
+    raise ValueError(f"{key} w .env musi być liczbą całkowitą od 1 do {maximum}")
+
+
+def connect(host, port, cafile, timeout):
     context = ssl.create_default_context(cafile=str(cafile))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    raw = socket.create_connection((host, port), timeout=5)
+    raw = socket.create_connection((host, port), timeout=timeout)
     try:
         return context.wrap_socket(raw, server_hostname=host)
     except BaseException:
@@ -70,11 +74,10 @@ def receive_exact(connection, size):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    add_connection_arguments(parser)
-    args = parser.parse_args()
+    parser.parse_args()
 
     try:
-        with connect(args.host, args.port, args.cafile) as connection:
+        with connect(*connection_settings()) as connection:
             reply = request(connection, {"type": "ping"})
             print(json.dumps(reply, ensure_ascii=False))
             return 0 if reply == {"type": "pong"} else 1

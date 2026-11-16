@@ -25,7 +25,7 @@ rebar3 shell
 ```
 
 Serwer korzysta z `epgsql` do rejestracji, logowania i odczytu własnych postaci.
-Czyta dane połączenia z `.env` (zmienne środowiska procesu mają pierwszeństwo).
+Czyta dane połączenia z pliku `server/.env`.
 Przy pierwszym uruchomieniu przygotuj lokalny certyfikat TLS według
 [README serwera](../server/README.md).
 
@@ -33,10 +33,10 @@ Przy pierwszym uruchomieniu przygotuj lokalny certyfikat TLS według
 
 | Pole | Wartość domyślna |
 |---|---|
-| Host | `127.0.0.1` |
-| Port | `5432` (zmienna `POSTGRES_PORT` w `.env`) |
-| Baza | `sdl_game` |
-| Użytkownik | `game_dev` |
+| Host | `127.0.0.1` (`POSTGRES_HOST` w `.env`) |
+| Port | `5432` (`POSTGRES_PORT`) |
+| Baza | `sdl_game` (`POSTGRES_DB`) |
+| Użytkownik | `game_dev` (`POSTGRES_USER`) |
 | Hasło | `POSTGRES_PASSWORD` z lokalnego `.env` |
 
 `game_dev` to konto administracyjne lokalnej bazy utworzone przez oficjalny
@@ -48,7 +48,7 @@ Z lokalnego Erlanga używamy `127.0.0.1` i portu hosta.
 ## Konsola SQL i logi
 
 ```powershell
-docker compose exec db psql -U game_dev -d sdl_game
+docker compose exec db sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 W konsoli SQL:

@@ -12,11 +12,5 @@
   "audio": {
     "volume": 100,
     "muted": false
-  },
-  "server": {
-    "host": "localhost",
-    "port": 4000,
-    "caFile": "server-ca.crt",
-    "timeoutMs": 5000
   }
 }

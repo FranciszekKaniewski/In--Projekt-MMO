@@ -16,11 +16,11 @@ Lokalny certyfikat utwórz jednorazowo w PowerShellu 7:
 ./tools/New-DevCertificate.ps1
 ```
 
-Pliki `priv/tls` są pomijane przez Git. `ca.crt` służy klientom do weryfikacji
-certyfikatu dla `localhost` i `127.0.0.1`; klucz CA nie jest zapisywany.
-Certyfikaty z `test/fixtures` są wyłącznie danymi testowymi.
-Na wdrożeniu ustaw własny certyfikat i klucz przez `GAME_TLS_CERTFILE`
-i `GAME_TLS_KEYFILE`. Serwer przyjmuje wyłącznie TLS 1.2/1.3.
+Skrypt bierze nazwę lub IP certyfikatu z `GAME_HOST` i zapisuje pliki pod
+ścieżkami `GAME_TLS_CERTFILE`, `GAME_TLS_KEYFILE` i `GAME_CAFILE` z `.env`.
+Certyfikat deweloperski obejmuje także `localhost`, `127.0.0.1` i `::1`.
+Pliki w `priv/tls` są pomijane przez Git. Na drugi komputer skopiuj publiczny
+certyfikat CA wskazany przez `GAME_CAFILE`. Klucz serwera trzymaj na serwerze.
 
 Jeżeli działa poprzednia wersja serwera, zakończ jej powłokę przez `q().`.
 W katalogu `server` uruchom:
@@ -29,24 +29,42 @@ W katalogu `server` uruchom:
 rebar3 shell
 ```
 
-`rebar3` kompiluje projekt i uruchamia aplikację `server`. Adres i port pochodzą
-z `config/sys.config`: domyślnie `127.0.0.1:4000`.
-W drugim terminalu, również w tym katalogu:
+`rebar3` kompiluje projekt i uruchamia aplikację `server`. W drugim terminalu,
+również w tym katalogu, sprawdź połączenie:
 
 ```powershell
 python tools/ping.py
 ```
 
-Oczekiwany wynik: `{"type": "pong"}`. Opcje `--host` i `--port` pozwalają zmienić
-adres. `server_listener:port().` w powłoce Erlanga pokazuje rzeczywisty port.
-Port `0` w konfiguracji oznacza, że system wybierze wolny port; używają go testy.
-`--cafile` wskazuje zaufany certyfikat CA, domyślnie `priv/tls/ca.crt`.
-Oba skrypty (`ping.py` i `auth.py`) czytają `GAME_HOST`, `GAME_PORT` i
-`GAME_CAFILE` z `server/.env`. Dla LAN ustaw `GAME_HOST` na adres serwera,
-a `GAME_CAFILE` na publiczny plik CA używany przez klientów, np.
-`priv/tls/lan/ca.crt`. Ścieżka `GAME_CAFILE` jest względna względem katalogu
-`server`. Zmienne środowiskowe mają pierwszeństwo przed `.env`, a argumenty
-`--host`, `--port` i `--cafile` pozwalają zmienić je dla jednego wywołania.
+Oczekiwany wynik to `{"type": "pong"}`.
+
+## Konfiguracja połączenia
+
+Dla serwera i obu narzędzi konfiguracja jest w `server/.env`.
+Ścieżki względne zaczynają się w katalogu pliku `.env`. Używaj UTF-8,
+wpisów `KLUCZ=wartość` i komentarzy w osobnych wierszach.
+
+| Zmienna | Znaczenie |
+|---|---|
+| `GAME_BIND_IP` | Lokalny adres IPv4, na którym serwer nasłuchuje |
+| `GAME_HOST` | IP lub domena, której używają klient i skrypty |
+| `GAME_PORT` | Port TCP gry |
+| `GAME_TLS_CERTFILE`, `GAME_TLS_KEYFILE` | Certyfikat serwera w PEM (z pośrednimi certyfikatami, jeśli są wymagane) i jego klucz |
+| `GAME_CAFILE` | Publiczny plik CA do weryfikacji certyfikatu serwera |
+| `GAME_TIMEOUT_MS` | Limit czasu połączenia i odpowiedzi dla klienta i skryptów |
+| `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Połączenie Erlanga z PostgreSQL |
+
+Przy grze na jednym komputerze ustaw `GAME_BIND_IP=127.0.0.1` i
+`GAME_HOST=localhost`. Dla LAN wpisz adres komputera z serwerem do
+`GAME_HOST` i jako `GAME_BIND_IP` użyj adresu LAN albo `0.0.0.0`, by
+nasłuchiwać na wszystkich interfejsach IPv4. Zezwól na ruch do portu gry
+w zaporze serwera.
+
+Przy wdrożeniu publicznym wpisz domenę w `GAME_HOST` i skonfiguruj DNS,
+certyfikat TLS dla tej domeny oraz dostęp do portu TCP w zaporze hostingu.
+Jeśli serwer działa za routerem z NAT, przekieruj port do komputera z grą.
+Połączenie gry używa tego samego protokołu TLS nad TCP. Klient na drugim
+komputerze konfiguruje połączenie zgodnie z [instrukcją klienta](../SDL_Game_Engine/README.md).
 
 Po kliknięciu `Play` klient wybiera postać i pobiera przypisany jej plik TMJ
 przez TLS. Klucze `map_expanded` i `map_example2` wskazują odpowiednio na
@@ -112,8 +130,9 @@ docker compose up -d --wait db
 Na nowej maszynie skopiuj `.env.example` do `.env` i ustaw hasło.
 Plik `.env` jest pomijany przez Git. Baza jest domyślnie dostępna na
 `127.0.0.1:5432`; dane przechowuje nazwany wolumen. `docker compose down`
-zachowuje dane bazy. `server_config` czyta `.env`; zmienne środowiska procesu
-mają pierwszeństwo. `server_db` utrzymuje jedno połączenie `epgsql`,
+zachowuje dane bazy. Docker Compose używa własnych reguł interpolacji.
+Jeśli zmienne `POSTGRES_*` są ustawione też w powłoce uruchamiającej Compose,
+mają tam pierwszeństwo. `server_db` utrzymuje jedno połączenie `epgsql`,
 serializuje zapytania i odtwarza połączenie po awarii. Błąd bazy daje
 `service_unavailable`, bez uwierzytelnienia klienta.
 

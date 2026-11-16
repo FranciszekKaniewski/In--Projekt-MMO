@@ -9,24 +9,25 @@ make run
 ```
 
 Przed logowaniem uruchom serwer według [jego instrukcji](../server/README.md).
-`make build` kopiuje lokalny publiczny certyfikat CA z
-`../server/priv/tls/ca.crt` do `build/Config/server-ca.crt`.
 Klient weryfikuje łańcuch certyfikatów i nazwę hosta, używając Windows Schannel.
-Nie instaluje CA w systemowym magazynie certyfikatów.
 
-Połączenie konfiguruje sekcja `server` w `build/Config/settings.json`:
+Przy uruchomieniu z repozytorium klient używa `server/.env`, jeśli obok
+`SDL_Game_Engine.exe` nie ma lokalnego `.env`. Ścieżka `GAME_CAFILE` jest
+względna względem użytego pliku `.env`.
 
-```json
-"server": {
-  "host": "localhost",
-  "port": 4000,
-  "caFile": "server-ca.crt",
-  "timeoutMs": 5000
-}
+Na drugim komputerze skopiuj `.env.example` do `.env` obok programu,
+uzupełnij adres i port serwera oraz skopiuj publiczny certyfikat CA pod
+ścieżkę `GAME_CAFILE`. Przykład dla LAN:
+
+```dotenv
+GAME_HOST=192.168.68.50
+GAME_PORT=4000
+GAME_CAFILE=ca.crt
+GAME_TIMEOUT_MS=5000
 ```
 
-Ścieżka `caFile` jest względna względem pliku ustawień. Login i hasło
-nie są zapisywane w konfiguracji ani wypisywane do konsoli.
+Do klienta dołącz tylko jego `.env` i publiczny plik CA. Adres w
+`GAME_HOST` musi być ujęty w certyfikacie TLS serwera.
 
 Przycisk Play wysyła dane logowania w tle i pokazuje odpowiedź serwera.
 Po sukcesie otwiera się lista własnych postaci z obsługą stron i odświeżania.

@@ -6,16 +6,9 @@ $taskTestDatabase = 'sdl_auth_test_' + [Guid]::NewGuid().ToString('N')
 $taskCreated = $false
 $taskTestExitCode = 1
 try {
-    $taskDbUser = $env:POSTGRES_USER
-    if ([string]::IsNullOrWhiteSpace($taskDbUser)) {
-        $taskDbUser = 'game_dev'
-        if (Test-Path -LiteralPath '.env') {
-            foreach ($taskLine in Get-Content -LiteralPath '.env') {
-                if ($taskLine -match '^\s*POSTGRES_USER\s*=\s*(.*?)\s*$') {
-                    $taskDbUser = $Matches[1].Trim('"', "'")
-                }
-            }
-        }
+    $taskDbUser = & docker compose exec -T db printenv POSTGRES_USER
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($taskDbUser)) {
+        throw 'Could not read POSTGRES_USER from the running database container.'
     }
     if ($taskTestDatabase -notmatch '^sdl_auth_test_[a-f0-9]{32}$') { throw 'Invalid test database name.' }
     & docker compose exec -T db psql -U $taskDbUser -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $taskTestDatabase"

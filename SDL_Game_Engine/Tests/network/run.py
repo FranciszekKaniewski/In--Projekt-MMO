@@ -2,6 +2,7 @@
 
 import concurrent.futures
 import json
+import os
 from pathlib import Path
 import socket
 import ssl
@@ -149,9 +150,16 @@ def run_case(mode, ca_file, tls_version):
         accept_thread = threading.Thread(target=accept)
         accept_thread.start()
         try:
-            result = subprocess.run([str(CLIENT), str(listener.getsockname()[1]), host,
-                                     str(ca_file), mode], cwd=ROOT, text=True, capture_output=True,
-                                    encoding="utf-8", timeout=12)
+            with tempfile.TemporaryDirectory(dir=CLIENT.parent) as directory:
+                env_path = Path(directory) / ".env"
+                env_path.write_text(
+                    f'# TLS fixture\nGAME_HOST = "{host}"\nGAME_PORT={listener.getsockname()[1]}\n'
+                    f"GAME_CAFILE='{os.path.relpath(ca_file, directory)}'\n"
+                    f"GAME_TIMEOUT_MS={350 if mode == 'timeout' else 5000}\n",
+                    encoding="utf-8-sig",
+                )
+                result = subprocess.run([str(CLIENT), str(env_path), mode], cwd=ROOT, text=True,
+                                        capture_output=True, encoding="utf-8", timeout=12)
         finally:
             stop.set()
             accept_thread.join(timeout=2)

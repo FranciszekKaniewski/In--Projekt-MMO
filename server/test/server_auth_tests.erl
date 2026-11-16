@@ -21,12 +21,10 @@ auth_database_test_() ->
     end.
 
 start() ->
-    application:load(server),
-    ok = server_config:load(),
     %% Never run account fixtures in the developer's game database.
     Database = os:getenv("POSTGRES_TEST_DB"),
     true = is_list(Database) andalso lists:prefix("sdl_auth_test_", Database),
-    Options = application:get_env(server, db_options, #{}),
+    Options = server_config:db_options(),
     server_test_support:start([{db_options, Options#{database => Database}},
         {register_ip_limit, 1000}, {login_ip_limit, 1000}, {login_user_limit, 1000}]).
 

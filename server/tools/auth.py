@@ -6,7 +6,7 @@ import json
 import sys
 import unicodedata
 
-from ping import add_connection_arguments, connect, request
+from ping import connect, connection_settings, request
 
 
 PASSWORD_REQUIREMENTS = (
@@ -37,8 +37,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["register", "login"])
     parser.add_argument("username")
-    add_connection_arguments(parser)
     args = parser.parse_args()
+    try:
+        settings = connection_settings()
+    except (OSError, ValueError) as error:
+        print(f"Błąd konfiguracji połączenia: {error}", file=sys.stderr)
+        return 1
     if args.action == "register":
         print(PASSWORD_REQUIREMENTS)
     password = getpass.getpass("Hasło: ")
@@ -51,7 +55,7 @@ def main():
             print("Hasła są różne.", file=sys.stderr)
             return 1
     try:
-        with connect(args.host, args.port, args.cafile) as connection:
+        with connect(*settings) as connection:
             reply = request(connection, {"type": args.action,
                                          "username": args.username, "password": password})
             del password

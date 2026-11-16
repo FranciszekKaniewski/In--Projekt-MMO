@@ -1,17 +1,11 @@
 #pragma once
 
+#include "ServerConfig.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-
-struct ServerConfig {
-    std::string host = "localhost";
-    std::uint16_t port = 4000;
-    std::string caFile = "server-ca.crt"; // Relative to the settings file.
-    int timeoutMs = 5000;
-};
 
 struct CharacterSummary {
     std::int64_t id = 0;
