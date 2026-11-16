@@ -10,11 +10,10 @@ struct DirectionalAnimationClip {
     int frameHeight = 64;
     int frameCount = 1;
     double frameDuration = 0.1;
+    std::array<int, 8> rows{{0, 1, 2, 3, 4, 5, 6, 7}};
 };
 
 struct DirectionalAnimationComponent {
     DirectionalAnimationClip idle;
     DirectionalAnimationClip walk;
-
-    std::array<int, 8> rows{{0, 1, 2, 3, 4, 5, 6, 7}};
 };

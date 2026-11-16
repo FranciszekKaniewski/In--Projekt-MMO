@@ -17,10 +17,7 @@ void renderSprites(ecs::Registry& world, SDL_Renderer* renderer, const CameraCom
                 sprite.size.x <= 0.0f || sprite.size.y <= 0.0f ||
                 !std::isfinite(sprite.size.x) || !std::isfinite(sprite.size.y)) return;
 
-            const auto center = transform.position + sprite.offset;
-            SDL_FRect destination{center.x - sprite.size.x * 0.5f,
-                                  center.y - sprite.size.y * 0.5f,
-                                  sprite.size.x, sprite.size.y};
+            auto destination = sprite.boundsAt(transform.position);
             if (!std::isfinite(destination.x) || !std::isfinite(destination.y) ||
                 !std::isfinite(destination.x + destination.w) ||
                 !std::isfinite(destination.y + destination.h)) return;

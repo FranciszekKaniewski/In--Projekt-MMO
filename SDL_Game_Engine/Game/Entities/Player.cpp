@@ -43,13 +43,12 @@ ecs::Entity spawnPlayer(ecs::Registry& world, math::Vector2 position) {
     world.addComponent<ColliderComponent>(player, ColliderComponent::box({20.0f, 10.0f}));
 
     auto& clips = world.addComponent<DirectionalAnimationComponent>(player);
-    clips.idle = {idle, 64, 64, 12, 0.125};
-    clips.walk = {walk, 64, 64, 8, 0.1};
-    clips.rows = {{3, 6, 5, 4, 7, 2, 1, 0}};
+    clips.idle = {idle, 64, 64, 12, 0.125, {{3, 6, 5, 4, 7, 2, 1, 0}}};
+    clips.walk = {walk, 64, 64, 8, 0.1, {{7, 6, 5, 4, 3, 2, 1, 0}}};
 
     auto& sprite = world.addComponent<SpriteComponent>(player);
     sprite.texture = idle;
-    sprite.source = {0, clips.rows[static_cast<std::size_t>(FacingDirection::South)] * 64, 64, 64};
+    sprite.source = {0, clips.idle.rows[static_cast<std::size_t>(FacingDirection::South)] * 64, 64, 64};
     sprite.size = {128.0f, 128.0f};
     sprite.offset = {0.0f, -24.0f};
 

@@ -32,13 +32,19 @@ struct WorldSnapshot {
     std::vector<WorldPlayer> players;
 };
 
+struct WorldChatMessage {
+    std::int64_t characterId;
+    std::string author;
+    std::string text;
+};
+
 inline constexpr double worldStep = 1.0 / 30.0;
 inline constexpr float movementStep = 1.0f / 60.0f;
 
 using RequestId = std::uint64_t;
 
 struct ServerReply {
-    enum class Type { Login, Characters, CharacterSelected, MapData, WorldJoined, WorldLeft, Error };
+    enum class Type { Login, Characters, CharacterSelected, MapData, WorldJoined, WorldLeft, ChatError, Error };
     RequestId request = 0; // Zero denotes an unsolicited connection/session event.
     Type type = Type::Error;
     std::string error;
@@ -59,8 +65,10 @@ public:
     virtual RequestId downloadMap() = 0;
     virtual RequestId enterWorld() = 0;
     virtual bool moveInput(std::int64_t sequence, int dx, int dy) = 0;
+    virtual bool sendChat(std::string text) = 0;
     virtual RequestId leaveWorld() = 0;
     virtual std::optional<WorldSnapshot> pollWorld() = 0;
+    virtual std::optional<WorldChatMessage> pollChat() = 0;
     virtual std::optional<ServerReply> poll() = 0;
     virtual bool isAuthenticated() const = 0;
     virtual std::optional<int> pingMs() const = 0;

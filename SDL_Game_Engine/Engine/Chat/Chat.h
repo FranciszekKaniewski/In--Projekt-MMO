@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,7 +23,7 @@ public:
     static constexpr std::size_t maxHistory = 100;
     using SendHandler = std::function<void(const ChatMessage&)>;
 
-    float bubbleRange = 240.0f;
+    std::optional<float> bubbleRange = 240.0f;
     float bubbleLifetime = 8.0f;
 
     void reset(ecs::Entity localSpeaker);

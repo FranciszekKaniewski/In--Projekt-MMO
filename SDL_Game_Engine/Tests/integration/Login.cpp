@@ -4,7 +4,9 @@
 #include "../../Engine/Scenes/UIScene.h"
 #include "../../Engine/Scenes/GameScene.h"
 #include "../support/GameSceneFixture.h"
+#include "../support/SpriteDrawCapture.h"
 #include <SDL_image.h>
+#include <algorithm>
 #include <array>
 #include <deque>
 #include <cstring>
@@ -25,6 +27,8 @@ public:
     std::optional<CharacterState> selected;
     std::optional<WorldSnapshot> snapshot;
     std::vector<std::array<std::int64_t, 3>> movementInputs;
+    std::vector<std::string> sentChat;
+    std::deque<WorldChatMessage> incomingChat;
     RequestId login(std::string name, std::string secret) override {
         ++logins; username = std::move(name); password = std::move(secret); return ++current;
     }
@@ -36,8 +40,13 @@ public:
         movementInputs.push_back({seq, dx, dy});
         return true;
     }
+    bool sendChat(std::string text) override { sentChat.push_back(std::move(text)); return true; }
     RequestId leaveWorld() override { ++worldLeaves; return ++current; }
     std::optional<WorldSnapshot> pollWorld() override { return std::exchange(snapshot, std::nullopt); }
+    std::optional<WorldChatMessage> pollChat() override {
+        if(incomingChat.empty()) return std::nullopt;
+        auto message = std::move(incomingChat.front()); incomingChat.pop_front(); return message;
+    }
     std::optional<ServerReply> poll() override {
         if(replies.empty()) return std::nullopt;
         auto reply = std::move(replies.front()); replies.pop_front(); return reply;
@@ -215,6 +224,18 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     App::deltaTime = 0.0f;
     canvas.client->snapshot = WorldSnapshot{10, {local, peer}}; canvas.update();
     REQUIRE(headAt(938));
+    canvas.client->incomingChat.push_back({42, "Peer", "Hello"});
+    canvas.client->incomingChat.push_back({43, "Other map", u8"Cześć!"});
+    canvas.update();
+    const auto& history = game->chatSession().messages();
+    REQUIRE(history[history.size() - 2].speaker);
+    REQUIRE(history.back().author == "Other map");
+    REQUIRE_FALSE(history.back().speaker);
+    App::sceneManager->render(canvas.app);
+    const SDL_Rect bubblePoint{910, 275, 1, 1};
+    std::array<Uint8, 4> bubblePixel{};
+    REQUIRE(SDL_RenderReadPixels(App::renderer, &bubblePoint, SDL_PIXELFORMAT_RGBA32, bubblePixel.data(), 4) == 0);
+    REQUIRE(bubblePixel == std::array<Uint8, 4>{248, 250, 252, 255});
     peer.x = 1710;
     canvas.client->snapshot = WorldSnapshot{11, {local, peer}}; canvas.update();
     REQUIRE(headAt(938));
@@ -265,8 +286,15 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     App::sceneManager->handleEvents(canvas.app, enter);
     SDL_Event text{}; text.type = SDL_TEXTINPUT; std::strcpy(text.text.text, "Hello");
     App::sceneManager->handleEvents(canvas.app, text);
+    const auto historySize = history.size();
     App::sceneManager->handleEvents(canvas.app, enter);
-    REQUIRE(game->chatSession().messages().back().author == u8"Żółw");
+    REQUIRE(canvas.client->sentChat == std::vector<std::string>{"Hello"});
+    REQUIRE(history.size() == historySize);
+    canvas.client->incomingChat.push_back({state.id, state.name, "Hello"});
+    canvas.update();
+    REQUIRE(history.size() == historySize + 1);
+    REQUIRE(history.back().author == u8"Żółw");
+    REQUIRE(history.back().speaker == game->chatSession().localSpeaker());
     SDL_Event escape{}; escape.type = SDL_KEYDOWN; escape.key.keysym.sym = SDLK_ESCAPE;
     App::sceneManager->handleEvents(canvas.app, escape);
     REQUIRE(canvas.client->worldLeaves == 1);
@@ -285,6 +313,51 @@ TEST_CASE("Character pages use server IDs and selection waits for server confirm
     canvas.update();
     REQUIRE(canvas.client->isAuthenticated());
     REQUIRE_FALSE(dynamic_cast<GameScene*>(App::sceneManager->activeScene));
+}
+
+TEST_CASE("Remote walk survives intermittent stationary snapshots and ends at a stop", "[integration][login][player]") {
+    LoginCanvas canvas;
+    Map map;
+    REQUIRE(map.load(std::filesystem::path(serverMaps) / "Map_expanded.tmj", "Assets/Graphics/TileSet_001.png"));
+    CharacterState character;
+    character.id = 1;
+    character.name = "Local";
+    character.x = 1350;
+    character.y = 1320;
+    App::sceneManager->changeScene([&] { return createNetworkGameScene(std::move(map), character); }, canvas.app);
+
+    const auto peerFrame = [&]() -> std::optional<int> {
+        SpriteDrawCapture capture;
+        App::sceneManager->render(canvas.app);
+        const auto peer = std::find_if(capture.draws.begin(), capture.draws.end(),
+            [](const auto& draw) { return draw.destination.x > 800; });
+        REQUIRE(peer != capture.draws.end());
+        int width = 0;
+        REQUIRE(SDL_QueryTexture(peer->texture, nullptr, nullptr, &width, nullptr) == 0);
+        if(width == 8 * peer->source.w) return peer->source.x / peer->source.w;
+        return std::nullopt;
+    };
+    const WorldPlayer local{{1, "Local"}, 1350, 1320, 4, false};
+    WorldPlayer peer{{2, "Peer"}, 1650, 1320, 2, false};
+    App::deltaTime = movementStep;
+    bool advanced = false;
+    for(int frame = 0; frame < 48; ++frame) {
+        if(frame % 2 == 0) {
+            peer.moving = frame < 28 && frame % 4 == 2;
+            peer.vx = peer.moving ? 160.0f : 0.0f;
+            if(peer.moving) peer.x += 160.0f * static_cast<float>(2 * worldStep);
+            canvas.client->snapshot = WorldSnapshot{100 + frame / 2, {local, peer}};
+        }
+        canvas.update();
+        if(frame >= 12 && frame < 28) {
+            const auto walking = peerFrame();
+            REQUIRE(walking);
+            advanced = advanced || *walking > 0;
+        }
+    }
+    REQUIRE(advanced);
+    REQUIRE_FALSE(peerFrame());
+    App::deltaTime = 0.0f;
 }
 
 TEST_CASE("Empty character list can be refreshed and logout clears the connection", "[integration][characters]") {

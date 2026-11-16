@@ -14,4 +14,9 @@ struct SpriteComponent {
     math::Vector2 offset{}; // Relative to TransformComponent's center.
     SDL_RendererFlip flip = SDL_FLIP_NONE;
     bool visible = true;
+
+    SDL_FRect boundsAt(math::Vector2 position) const noexcept {
+        const auto center = position + offset;
+        return {center.x - size.x * 0.5f, center.y - size.y * 0.5f, size.x, size.y};
+    }
 };

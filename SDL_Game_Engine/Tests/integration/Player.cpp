@@ -182,13 +182,14 @@ TEST_CASE_METHOD(PlayerSDLFixture, "Walk and idle select all eight supplied dire
     const auto& clips = world.getComponent<DirectionalAnimationComponent>(player);
     const std::array<math::Vector2, 8> directions{{{0,-1}, {1,-1}, {1,0}, {1,1},
                                                  {0,1}, {-1,1}, {-1,0}, {-1,-1}}};
-    const std::array<int, 8> rows{{3, 6, 5, 4, 7, 2, 1, 0}};
+    const std::array<int, 8> idleRows{{3, 6, 5, 4, 7, 2, 1, 0}};
+    const std::array<int, 8> walkRows{{7, 6, 5, 4, 3, 2, 1, 0}};
     for (std::size_t i = 0; i < directions.size(); ++i) {
         input.direction = directions[i];
         updateMovement(world, 0.01f);
         updateDirectionalAnimations(world);
         REQUIRE(sprite.texture == clips.walk.texture);
-        REQUIRE(animation.row == rows[i]);
+        REQUIRE(animation.row == walkRows[i]);
         REQUIRE(animation.frameCount == 8);
         updateAnimations(world, 0.7);
         // Visit every frame, including the final column, and check that it renders.
@@ -196,7 +197,7 @@ TEST_CASE_METHOD(PlayerSDLFixture, "Walk and idle select all eight supplied dire
             animation.currentFrame = frame;
             updateAnimations(world, 0.0);
             REQUIRE(sprite.source.x == frame * 64);
-            REQUIRE(sprite.source.y == rows[i] * 64);
+            REQUIRE(sprite.source.y == walkRows[i] * 64);
             REQUIRE(canvas.drawCharacter(world) > 100);
         }
 
@@ -204,7 +205,7 @@ TEST_CASE_METHOD(PlayerSDLFixture, "Walk and idle select all eight supplied dire
         updateMovement(world, 0.01f);
         updateDirectionalAnimations(world);
         REQUIRE(sprite.texture == clips.idle.texture);
-        REQUIRE(animation.row == rows[i]);
+        REQUIRE(animation.row == idleRows[i]);
         REQUIRE(animation.frameCount == 12);
         for (int frame = 0; frame < 12; ++frame) {
             animation.currentFrame = frame;
@@ -232,12 +233,19 @@ TEST_CASE_METHOD(PlayerSDLFixture, "Continuous walking preserves animation time 
     REQUIRE(animation.currentFrame == 2);
     REQUIRE(std::abs(animation.elapsed - 0.05) < 0.00001);
 
+    input.direction = {0, -1};
+    updateMovement(world, 0.125f);
+    updateDirectionalAnimations(world);
+    REQUIRE(animation.row == 7);
+    REQUIRE(animation.currentFrame == 2);
+    REQUIRE(std::abs(animation.elapsed - 0.05) < 0.00001);
+
     input.direction = {};
     updateMovement(world, 0.125f);
     updateDirectionalAnimations(world);
     REQUIRE(animation.currentFrame == 0);
     REQUIRE(animation.elapsed == 0.0);
-    REQUIRE(animation.row == 5); // Idle still faces east.
+    REQUIRE(animation.row == 3); // Idle still faces north.
     updateAnimations(world, 0.25);
     updateDirectionalAnimations(world);
     REQUIRE(animation.currentFrame == 2);

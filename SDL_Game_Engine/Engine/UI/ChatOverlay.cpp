@@ -3,6 +3,7 @@
 #include "../ECS/Components/CameraComponent.h"
 #include "../ECS/Components/ChatSpeakerComponent.h"
 #include "../ECS/Components/SpeechBubbleComponent.h"
+#include "../ECS/Components/SpriteComponent.h"
 #include "../ECS/Components/TransformComponent.h"
 
 #include <algorithm>
@@ -156,19 +157,24 @@ void ChatOverlay::rebuildHistory() {
 }
 
 void ChatOverlay::renderBubbles(const CameraComponent* camera, WindowSize screen) {
+    CameraComponent screenView;
+    screenView.size = {static_cast<float>(screen.wight), static_cast<float>(screen.height)};
+    const auto& view = camera ? *camera : screenView;
     for (auto& entry : bubbleImages) entry.second.seen = false;
     world.forEach<TransformComponent, ChatSpeakerComponent, SpeechBubbleComponent>(
         [&](ecs::Entity entity, const TransformComponent& transform,
             const ChatSpeakerComponent& speaker, const SpeechBubbleComponent& bubble) {
             if (bubble.remaining <= 0.0f || !std::isfinite(bubble.remaining) ||
                 !session.canShowBubble(world, entity)) return;
-            auto anchor = transform.position + speaker.bubbleOffset;
-            if (camera) {
-                if (!camera->isValid()) return;
-                anchor -= camera->position;
-            }
-            if (!std::isfinite(anchor.x) || !std::isfinite(anchor.y) ||
-                anchor.x < 0 || anchor.y < 0 || anchor.x >= screen.wight || anchor.y >= screen.height) return;
+            const auto* sprite = world.tryGetComponent<SpriteComponent>(entity);
+            if (sprite && (!sprite->visible || !sprite->texture)) return;
+            const auto bounds = sprite ? sprite->boundsAt(transform.position) :
+                SDL_FRect{transform.position.x, transform.position.y, 1.0f, 1.0f};
+            if (!view.isVisible(bounds)) return;
+            auto anchor = transform.position + speaker.bubbleOffset - view.position;
+            if (!std::isfinite(anchor.x) || !std::isfinite(anchor.y)) return;
+            anchor.x = std::clamp(anchor.x, 0.0f, static_cast<float>(screen.wight - 1));
+            anchor.y = std::clamp(anchor.y, 0.0f, static_cast<float>(screen.height - 1));
 
             auto& cached = bubbleImages[entity.id()];
             cached.seen = true;

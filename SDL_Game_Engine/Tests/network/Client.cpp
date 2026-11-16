@@ -82,8 +82,18 @@ int wmain(int argc, wchar_t** argv) {
                         "Server spawn was not applied");
                 require(client->moveInput(1, 1, 0) && client->moveInput(2, 0, 0),
                         "Inputs could not be queued");
+                require(client->sendChat(u8"Cześć!") && client->sendChat(" "), "Chat could not be queued");
+                const auto rejected = await(*client, 0);
+                require(rejected.type == ServerReply::Type::ChatError && rejected.error == "invalid_message",
+                        "Chat rejection was not reported as an event");
                 require(await(*client, client->listCharacters()).type == ServerReply::Type::Characters,
                         "World events interrupted an ordinary reply");
+                const auto echo = client->pollChat();
+                const auto remote = client->pollChat();
+                require(echo && echo->characterId == 9007199254741009LL && echo->author == u8"Żółw" &&
+                        echo->text == u8"Cześć!" && remote && remote->characterId == 42 &&
+                        remote->author == "Other map" && remote->text == "Hello" && !client->pollChat(),
+                        "Chat events lost content, order or identity");
                 const auto first = client->pollWorld();
                 const auto state = client->pollWorld();
                 require(first && first->tick == 10 && state && state->tick == 11 && state->players.size() == 2 &&
@@ -94,6 +104,7 @@ int wmain(int argc, wchar_t** argv) {
                 require(await(*client, client->leaveWorld()).type == ServerReply::Type::WorldLeft,
                         "Leave world failed");
                 require(!client->pollWorld() && client->isAuthenticated(), "Leaving retained stale world state");
+                require(!client->pollChat() && !client->sendChat("Left"), "Leaving retained chat state");
                 require(await(*client, client->listCharacters()).type == ServerReply::Type::Characters,
                         "The TLS session did not survive leaving the world");
                 const auto pingDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(4);

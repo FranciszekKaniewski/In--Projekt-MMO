@@ -16,6 +16,7 @@
 
 namespace {
 constexpr double interpolationDelay = 0.045;
+constexpr float walkAnimationGrace = static_cast<float>(2 * worldStep);
 constexpr float correctionDuration = 0.05f;
 constexpr float maxSmoothCorrection = 12.0f;
 constexpr std::size_t maxPendingInputs = 16;
@@ -27,6 +28,11 @@ struct RemoteSample {
     math::Vector2 velocity;
     FacingDirection facing;
     bool moving;
+};
+
+struct RemoteMotion {
+    std::deque<RemoteSample> samples;
+    float walkRemaining = 0.0f;
 };
 
 struct MovementInput {
@@ -100,11 +106,11 @@ private:
                 const auto entity = spawnPlayer(world, {state.x, state.y});
                 if(!entity) continue;
                 world.removeComponent<VelocityComponent>(entity);
-                world.addComponent<std::deque<RemoteSample>>(entity);
+                world.addComponent<RemoteMotion>(entity);
                 world.getComponent<ChatSpeakerComponent>(entity).name = state.name;
                 found = others.emplace(state.id, entity).first;
             }
-            auto& samples = world.getComponent<std::deque<RemoteSample>>(found->second);
+            auto& samples = world.getComponent<RemoteMotion>(found->second).samples;
             if(samples.size() == 4) samples.pop_front();
             samples.push_back({snapshot.tick, {state.x, state.y}, {state.vx, state.vy},
                                static_cast<FacingDirection>(state.facing), state.moving});
@@ -113,10 +119,11 @@ private:
 
     void updateRemotePlayers(float elapsed) {
         if(!latestTick) return;
-        renderTick = std::min(renderTick + elapsed / worldStep, static_cast<double>(latestTick + 1));
+        renderTick = std::min(renderTick + elapsed / worldStep, static_cast<double>(latestTick) + 1.0);
         for(const auto& entry : others) {
             const auto entity = entry.second;
-            auto& samples = world.getComponent<std::deque<RemoteSample>>(entity);
+            auto& remote = world.getComponent<RemoteMotion>(entity);
+            auto& samples = remote.samples;
             while(samples.size() > 1 && samples[1].tick <= renderTick) samples.pop_front();
             const auto& first = samples.front();
             auto position = first.position;
@@ -134,8 +141,10 @@ private:
             }
             world.getComponent<TransformComponent>(entity).position = clampToMap(position);
             auto& movement = world.getComponent<MovementComponent>(entity);
+            // Keep the walk clip playing through a brief gap in received movement.
+            remote.walkRemaining = moving ? walkAnimationGrace : std::max(0.0f, remote.walkRemaining - elapsed);
             movement.facing = first.facing;
-            movement.moving = moving;
+            movement.moving = remote.walkRemaining > 0.0f;
         }
     }
 
@@ -178,6 +187,13 @@ public:
         view.bounds = {map.position.x, map.position.y, mapSize.x, mapSize.y};
         updateCameras(world);
         enableChat(player);
+        if(saved.id && app.serverClient) {
+            chatSession().bubbleRange.reset();
+            chatSession().setSendHandler([this, &app](const ChatMessage& message) {
+                if(!pendingLeave && !app.serverClient->sendChat(message.text))
+                    receiveServerMessage(serverErrorText("server_busy"));
+            });
+        }
     }
 
 protected:
@@ -188,6 +204,10 @@ protected:
                reply->type == ServerReply::Type::WorldLeft) {
                 App::sceneManager->changeScene(createCharactersScene, app);
                 return;
+            }
+            if(reply->type == ServerReply::Type::ChatError) {
+                receiveServerMessage(reply->error == "invalid_message" ?
+                    u8"Serwer odrzucił wiadomość czatu." : serverErrorText(reply->error));
             }
             if(reply->type == ServerReply::Type::Error) {
                 if(!app.serverClient->isAuthenticated()) {
@@ -206,6 +226,13 @@ protected:
             }
         }
         while(auto snapshot = app.serverClient->pollWorld()) applySnapshot(*snapshot);
+        while(auto message = app.serverClient->pollChat()) {
+            ecs::Entity speaker;
+            if(message->characterId == saved.id) speaker = player;
+            else if(const auto found = others.find(message->characterId); found != others.end())
+                speaker = found->second;
+            receiveChatMessage({ChatSource::Player, speaker, std::move(message->author), std::move(message->text)});
+        }
         const float elapsed = App::deltaTime;
         if(!std::isfinite(elapsed) || elapsed < 0) return;
         updateRemotePlayers(elapsed);

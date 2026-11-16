@@ -9,6 +9,7 @@
 #include "../../Engine/Renderer/ColliderDebugRenderer.h"
 #include "../../Engine/Scenes/GameScene.h"
 #include "../../Engine/World/Map.h"
+#include "../support/SpriteDrawCapture.h"
 #include <SDL_image.h>
 #include <nlohmann/json.hpp>
 
@@ -50,6 +51,8 @@ extern "C" int SDLCALL __wrap_SDL_RenderCopyExF(SDL_Renderer* renderer, SDL_Text
     const SDL_Rect* source, const SDL_FRect* destination, double angle,
     const SDL_FPoint* center, SDL_RendererFlip flip) {
     if (recording) ++recording->sprites;
+    if (SpriteDrawCapture::active && source && destination)
+        SpriteDrawCapture::active->draws.push_back({texture, *source, *destination});
     return __real_SDL_RenderCopyExF(renderer, texture, source, destination, angle, center, flip);
 }
 

@@ -75,11 +75,12 @@ void ChatSession::update(ecs::Registry& world, float deltaTime) {
 }
 
 bool ChatSession::canShowBubble(const ecs::Registry& world, ecs::Entity speaker) const {
-    if (!std::isfinite(bubbleRange) || bubbleRange < 0.0f) return false;
-    const auto* listenerPosition = world.tryGetComponent<TransformComponent>(local);
     const auto* speakerPosition = world.tryGetComponent<TransformComponent>(speaker);
+    if (!bubbleRange) return speakerPosition != nullptr;
+    if (!std::isfinite(*bubbleRange) || *bubbleRange < 0.0f) return false;
+    const auto* listenerPosition = world.tryGetComponent<TransformComponent>(local);
     if (!listenerPosition || !speakerPosition) return false;
     const double dx = static_cast<double>(speakerPosition->position.x) - listenerPosition->position.x;
     const double dy = static_cast<double>(speakerPosition->position.y) - listenerPosition->position.y;
-    return std::hypot(dx, dy) <= bubbleRange;
+    return std::hypot(dx, dy) <= *bubbleRange;
 }

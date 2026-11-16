@@ -193,7 +193,8 @@ kolizje z lądem i wodą nie są jeszcze zaimplementowane.
 
 Gracz korzysta z oryginalnych `Assets/Player/player_idle_full_sprite_sheet.png` (12 klatek)
 i `player_walk_complete_sprite_sheet.png` (8 klatek).
-Klatki mają 64 × 64 px i osiem wierszy: NW, W, SW, N, SE, E, NE, S.
+Klatki mają 64 × 64 px. Kolejność wierszy animacji stania to NW, W, SW, N, SE, E, NE, S,
+a animacji chodu NW, W, SW, S, SE, E, NE, N.
 Puszczenie WASD przywraca animację stania w ostatnim kierunku.
 Sprite ma rozmiar 128 × 128 jednostek, z przezroczystymi marginesami, i offset `(0, -24)`;
 pozycja encji oraz śledzony punkt kamery wypadają przy stopach. Kamera początkowo śledzi gracza.
@@ -227,9 +228,9 @@ Scena nie zawiera odczytu klawiatury, obliczania ruchu ani wyboru klatek.
 - `MovementSystem` ogranicza długość intencji do jedności, zapisuje prędkość pod nazwą `movement`,
   zachowuje inne składowe i całkuje sumę prędkości raz na krok. Opcjonalne granice dotyczą pozycji
   encji, z uwzględnieniem marginesu hitboxa ustawionego przez scenę.
-- `DirectionalAnimationComponent` przechowuje klipy stania/chodu i mapowanie ośmiu kierunków
-  na wiersze arkusza. `DirectionalAnimationSystem` wybiera klip po ruchu, a `AnimationSystem`
-  odmierza czas. Niezmieniona animacja zachowuje klatkę i zegar; zatrzymanie zachowuje kierunek.
+- `DirectionalAnimationComponent` przechowuje klipy stania i chodu z osobnym mapowaniem kierunków
+  dla każdego arkusza. `DirectionalAnimationSystem` wybiera klip po ruchu, a `AnimationSystem`
+  odmierza czas. Zmiana kierunku w tym samym klipie zachowuje klatkę i zegar animacji.
 
 `updateWorld()` jest miejscem na komendy AI lub sieci przed symulacją. Ruch nie zależy od SDL;
 odczyt lokalnej klawiatury i tekstury są osobnymi warstwami. Nie ma jeszcze transportu sieciowego.

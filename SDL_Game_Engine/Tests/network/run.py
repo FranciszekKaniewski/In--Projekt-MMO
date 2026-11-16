@@ -84,6 +84,9 @@ def run_case(mode, ca_file, tls_version):
                         send(connection, {"type": "login_ok", "user_id": 1, "username": "tester", "expires_in_ms": 28800000})
                     elif kind == "list_characters":
                         assert message["after_id"] == 0
+                        if mode == "world" and any(kind == "chat_send" for _, kind in requests):
+                            send(connection, {"type": "chat_message", "character_id": 42,
+                                              "name": "Other map", "text": "Hello"})
                         send(connection, {"type": "characters", "characters": [{"id": CHARACTER_ID, "name": "Żółw"}], "has_more": False})
                     elif kind == "select_character":
                         assert message["character_id"] == CHARACTER_ID
@@ -117,7 +120,16 @@ def run_case(mode, ca_file, tls_version):
                                  input_ack=seq, vx=160 if seq == 1 else 0, vy=0),
                             dict(CHARACTER, id=CHARACTER_ID + 1, name="Peer", moving=False,
                                  input_ack=0, vx=0, vy=0)]})
+                    elif kind == "chat_send" and mode == "world":
+                        assert message in ({"type": "chat_send", "text": "Cześć!"}, {"type": "chat_send", "text": " "})
+                        if message["text"] == " ":
+                            send(connection, {"type": "chat_error", "code": "invalid_message"})
+                        else:
+                            send(connection, {"type": "chat_message", "character_id": CHARACTER_ID,
+                                              "name": CHARACTER["name"], "text": message["text"]})
                     elif kind == "leave_world" and mode == "world":
+                        send(connection, {"type": "chat_message", "character_id": 42,
+                                          "name": "Other map", "text": "Stale"})
                         send(connection, {"type": "world_left"})
                     elif kind == "ping":
                         time.sleep(0.03)
@@ -176,7 +188,8 @@ def run_case(mode, ca_file, tls_version):
         assert {number for number, _ in requests} == {0}
     if mode == "world":
         assert command_types == ["login", "list_characters", "select_character",
-            "enter_world", "move_input", "move_input", "list_characters", "leave_world", "list_characters"]
+            "enter_world", "move_input", "move_input", "chat_send", "chat_send", "list_characters",
+            "leave_world", "list_characters"]
         assert (0, "ping") in requests
     print(result.stdout.strip())
 

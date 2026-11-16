@@ -12,17 +12,18 @@ void updateDirectionalAnimations(ecs::Registry& world) {
         [](ecs::Entity, const MovementComponent& movement, const DirectionalAnimationComponent& clips,
            SpriteComponent& sprite, AnimationComponent& animation) {
             const auto direction = static_cast<std::size_t>(movement.facing);
-            if (direction >= clips.rows.size()) return;
             const auto& clip = movement.moving ? clips.walk : clips.idle;
-            const int row = clips.rows[direction];
+            if (direction >= clip.rows.size()) return;
+            const int row = clip.rows[direction];
             if (!clip.texture || row < 0 || clip.frameWidth <= 0 || clip.frameHeight <= 0 ||
                 clip.frameCount <= 0 || clip.frameDuration <= 0.0 ||
                 !std::isfinite(clip.frameDuration)) return;
 
             if (sprite.texture == clip.texture && sprite.source.w == clip.frameWidth &&
-                sprite.source.h == clip.frameHeight && animation.row == row &&
+                sprite.source.h == clip.frameHeight &&
                 animation.frameCount == clip.frameCount && animation.frameDuration == clip.frameDuration) {
-                return; // Keep the current frame and clock while the clip is unchanged.
+                animation.row = row;
+                return; // Turning keeps the current frame and clock within the clip.
             }
 
             sprite.texture = clip.texture;

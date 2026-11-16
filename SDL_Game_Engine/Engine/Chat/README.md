@@ -37,21 +37,21 @@ speaker.bubbleOffset = {0.0f, -64.0f};
 
 Odebrana wypowiedź takiej encji dodaje lub odświeża `SpeechBubbleComponent`.
 Nowa wypowiedź zastępuje poprzedni dymek. Domyślnie trwa on 8 sekund, a ostatnią sekundę zanika.
-Renderer pokazuje go, gdy mówiąca postać jest nie dalej niż 240 jednostek świata od lokalnego
-gracza. Dotyczy to również własnej postaci. Zasięg jest sprawdzany podczas rysowania, więc
-podejście lub odejście zmienia widoczność. Wiadomości serwera pozostają wyłącznie w panelu.
+W grze sieciowej dymek jest widoczny, gdy postać nadawcy znajduje się w polu widzenia kamery.
+Lokalny czat dodatkowo ogranicza widoczność dymka do 240 jednostek świata od gracza.
+Dotyczy to również własnej postaci. Wiadomości serwera pozostają wyłącznie w panelu.
 
 Parametry można ustawić przez `chatSession().bubbleRange` i `chatSession().bubbleLifetime`.
 Granice mapy nie wpływają na położenie panelu, natomiast dymki poruszają się wraz z postaciami
 i kamerą. Długie wypowiedzi mają szerszy dymek, aby zmieścić więcej tekstu nad głową.
 
-## Odbiór i przyszły transport
+## Odbiór i transport
 
-Gra nie ma jeszcze połączenia sieciowego. Bez transportu lokalne wysłanie natychmiast trafia
-do wspólnego mechanizmu odbioru, historii i dymków. Komunikat powitalny `Serwer` pochodzi
-z lokalnego systemu gry.
+W grze sieciowej `Scene2` przekazuje tekst do `GameClient`. Serwer rozsyła wiadomość
+wszystkim graczom w świecie gry, również na innych mapach. Nadawca otrzymuje tę samą
+wiadomość z serwera. Bez transportu lokalne wysłanie trafia bezpośrednio do historii i dymków.
 
-Publiczne API `GameScene` pozwala dostarczać wiadomości z logiki gry lub przyszłego klienta:
+Publiczne API `GameScene` pozwala dostarczać wiadomości z logiki gry lub z sieci:
 
 ```cpp
 gameScene.receiveServerMessage(u8"Restart świata za 5 minut.");

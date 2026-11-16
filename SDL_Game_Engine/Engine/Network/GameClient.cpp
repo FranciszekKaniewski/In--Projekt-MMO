@@ -17,6 +17,8 @@ using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
 constexpr std::size_t maxMapBytes = 1024 * 1024;
 constexpr std::size_t mapFrameBytes = 4096;
+constexpr std::size_t maxChatBytes = 256 * 4;
+constexpr std::size_t maxQueuedChatMessages = 100;
 constexpr auto pingInterval = std::chrono::seconds(1);
 constexpr auto pingFreshness = std::chrono::seconds(5);
 
@@ -123,6 +125,7 @@ class AsyncGameClient final : public GameClient {
     std::optional<CharacterState> selected;
     bool inWorld = false;
     std::deque<WorldSnapshot> worldSnapshots;
+    std::deque<WorldChatMessage> chatMessages;
     std::int64_t latestWorldTick = 0;
     std::optional<std::pair<int, Clock::time_point>> pingSample;
     std::optional<Clock::time_point> pingSent; // Network worker only.
@@ -172,6 +175,23 @@ class AsyncGameClient final : public GameClient {
             return true;
         }
         if(type == "move_error") throw NetworkError(text(message.at("code"), 64));
+        if(type == "chat_error") {
+            ServerReply failure;
+            failure.type = ServerReply::Type::ChatError;
+            failure.error = text(message.at("code"), 64);
+            post(std::move(failure), activeGeneration);
+            return true;
+        }
+        if(type == "chat_message") {
+            std::lock_guard<std::mutex> lock(mutex);
+            if(activeGeneration == generation.load() && !stopping && inWorld) {
+                WorldChatMessage chat{integer(message.at("character_id")), text(message.at("name"), 128),
+                                      text(message.at("text"), maxChatBytes)};
+                if(chatMessages.size() == maxQueuedChatMessages) chatMessages.pop_front();
+                chatMessages.push_back(std::move(chat));
+            }
+            return true;
+        }
         if(type != "world_state") return false;
         postWorld(message);
         return true;
@@ -222,6 +242,14 @@ class AsyncGameClient final : public GameClient {
         return id;
     }
 
+    // Called with mutex held.
+    void clearWorld() {
+        inWorld = false;
+        worldSnapshots.clear();
+        chatMessages.clear();
+        latestWorldTick = 0;
+    }
+
     void post(ServerReply reply, std::uint64_t version) {
         std::lock_guard<std::mutex> lock(mutex);
         if(version != generation.load() || stopping) return;
@@ -235,9 +263,8 @@ class AsyncGameClient final : public GameClient {
             selected = reply.character;
             inWorld = true;
         }
-        if(reply.type == ServerReply::Type::WorldLeft) {
-            inWorld = false; worldSnapshots.clear(); latestWorldTick = 0;
-        }
+        if(reply.type == ServerReply::Type::WorldLeft) clearWorld();
+        if(reply.type == ServerReply::Type::ChatError && !inWorld) return;
         if(replies.size() >= 64) replies.pop_front();
         replies.push_back(std::move(reply));
     }
@@ -246,8 +273,8 @@ class AsyncGameClient final : public GameClient {
         pingSent.reset();
         std::lock_guard<std::mutex> lock(mutex);
         if(version == generation.load()) {
-            authenticated = false; selected.reset(); inWorld = false;
-            worldSnapshots.clear(); latestWorldTick = 0;
+            authenticated = false; selected.reset();
+            clearWorld();
             pingSample.reset();
         }
     }
@@ -289,7 +316,7 @@ class AsyncGameClient final : public GameClient {
                     command->body.erase("password");
                     connection.sendFrame(body, timeout);
                     std::fill(body.begin(), body.end(), '\0');
-                    if(command->id == 0) continue; // Movement is acknowledged in world_state.
+                    if(command->id == 0) continue; // Movement and chat use asynchronous events.
                     auto reply = receiveReply(*command, timeout);
                     if(reply.type == ServerReply::Type::Error && (loginRequest || sessionLost(reply.error))) {
                         connection.close(); connected = false; clearSession(activeGeneration);
@@ -355,6 +382,13 @@ public:
         wake.notify_one();
         return true;
     }
+    bool sendChat(std::string text) override {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(!inWorld || commands.size() >= 15) return false;
+        commands.push_back({0, generation.load(), {{"type", "chat_send"}, {"text", std::move(text)}}});
+        wake.notify_one();
+        return true;
+    }
     RequestId leaveWorld() override { return enqueue({{"type", "leave_world"}}); }
     std::optional<WorldSnapshot> pollWorld() override {
         std::lock_guard<std::mutex> lock(mutex);
@@ -362,6 +396,13 @@ public:
         auto snapshot = std::move(worldSnapshots.front());
         worldSnapshots.pop_front();
         return snapshot;
+    }
+    std::optional<WorldChatMessage> pollChat() override {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(chatMessages.empty()) return std::nullopt;
+        auto message = std::move(chatMessages.front());
+        chatMessages.pop_front();
+        return message;
     }
     std::optional<ServerReply> poll() override {
         std::lock_guard<std::mutex> lock(mutex);
@@ -383,7 +424,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex);
             ++generation; commands.clear(); replies.clear(); authenticated = false; selected.reset();
-            inWorld = false; worldSnapshots.clear(); latestWorldTick = 0;
+            clearWorld();
             pingSample.reset();
         }
         connection.interrupt(); wake.notify_all();
