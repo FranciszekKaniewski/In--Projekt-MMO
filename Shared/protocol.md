@@ -29,6 +29,7 @@ Nieznane dodatkowe pola są ignorowane; pole `user_id` klienta nie określa kont
 | `get_map` | Zalogowane konto, wybrana postać | `map_data` i ramki z plikiem TMJ |
 | `enter_world` | Zalogowane konto, pobrana mapa postaci | `world_joined` |
 | `move_input` | Postać w świecie | `input_ack` w kolejnym stanie świata |
+| `chat_send` | Postać w świecie | `chat_message` rozsyłane do graczy |
 | `leave_world` | Zalogowane konto | `world_left` |
 | `logout` | Zalogowane konto | `logout_ok` |
 
@@ -122,7 +123,8 @@ przewiduje ruch własnej postaci od razu, a po odebraniu stanu odtwarza
 wejścia z numerem większym od `input_ack`. Dla pozostałych postaci
 interpoluje stany według `tick` z docelowym opóźnieniem 45 ms.
 Przy braku następnego stanu może wykorzystać `vx` i `vy` przez maksymalnie
-jeden krok świata. Obie prędkości podano w jednostkach na sekundę.
+jeden krok świata. Krótka przerwa w ruchu podtrzymuje animację chodu przez
+maksymalnie dwa kroki świata. Obie prędkości podano w jednostkach na sekundę.
 
 Odrzucone wejście w aktywnej sesji daje zdarzenie `move_error` z polem
 `code`. Przy wyjściu, wylogowaniu, wygaśnięciu sesji lub zamknięciu
@@ -132,6 +134,25 @@ po udanym zapisie. Jeśli zapis się nie powiedzie, klient może ponowić
 żądanie. Po zerwaniu połączenia lub wygaśnięciu sesji serwer ponawia
 zapis przy chwilowej niedostępności bazy. Przy następnym wejściu do
 świata serwer odczytuje zapisaną pozycję.
+
+## Czat
+
+```json
+{"type":"chat_send","text":"Cześć!"}
+{"type":"chat_message","character_id":12,"name":"Rycerz","text":"Cześć!"}
+```
+
+Serwer pobiera `character_id` i `name` z aktywnej postaci nadawcy. Każda
+przyjęta wiadomość trafia jako zdarzenie `chat_message` do wszystkich graczy
+w świecie, w tym do nadawcy oraz do graczy na innych mapach. Klient dodaje
+zdarzenie do panelu czatu i pokazuje dymek, gdy postać nadawcy jest w polu
+widzenia kamery.
+
+`text` musi zawierać od 1 do 256 punktów kodowych Unicode. Serwer usuwa
+białe znaki z początku i końca tekstu. Odrzuca puste wiadomości oraz tekst
+ze znakami sterującymi ASCII, w tym znakami nowej linii. Odrzucone żądanie
+zalogowanego klienta daje zdarzenie `chat_error` z polem `code`
+(`invalid_message` lub `world_required`).
 
 ## Błędy
 
@@ -143,7 +164,7 @@ zapis przy chwilowej niedostępności bazy. Przy następnym wejściu do
 |---|---|
 | `invalid_json` | Niepoprawny JSON lub UTF-8 |
 | `invalid_message` | Niepoprawna struktura wiadomości lub identyfikator |
-| `unknown_message_type` | Nieobsługiwany typ, również `join` i `chat_send` |
+| `unknown_message_type` | Nieobsługiwany typ, również `join` |
 | `invalid_registration` | Niepoprawny login lub hasło przy rejestracji |
 | `registration_failed` | Konto nie mogło zostać utworzone, np. zajęty login |
 | `invalid_credentials` | Błędny login lub hasło; wspólny kod również dla braku konta |
@@ -154,7 +175,7 @@ zapis przy chwilowej niedostępności bazy. Przy następnym wejściu do
 | `map_not_found` | Serwer nie obsługuje klucza mapy zapisanej dla postaci |
 | `map_unavailable` | Serwer nie może odczytać pliku TMJ lub plik ma nieprawidłowy rozmiar |
 | `map_required` | Przed wejściem do świata trzeba pobrać mapę wybranej postaci |
-| `world_required` | Ruch wymaga wejścia do świata |
+| `world_required` | Ruch i czat wymagają wejścia do świata |
 | `already_in_world` | Połączenie jest już w świecie gry |
 | `character_in_world` | Wybrana postać jest aktywna w innym połączeniu |
 | `world_full` | Mapa osiągnęła limit aktywnych postaci |
