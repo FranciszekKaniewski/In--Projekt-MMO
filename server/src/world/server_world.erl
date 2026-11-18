@@ -8,8 +8,8 @@
 -define(STEP, (160.0 / ?INPUT_RATE)).
 -define(PLAYER_HALF_SIZE, {10.0, 5.0}).
 -define(MAX_PENDING_INPUTS, 32).
-%% The full JSON snapshot, including Unicode names and bigint IDs, fits one 4 KiB frame.
--define(MAX_PLAYERS_PER_MAP, 10).
+%% The full JSON snapshot at this capacity fits the protocol's 128 KiB world_state budget.
+-define(MAX_PLAYERS_PER_MAP, 1024).
 
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 enter(UserId, #{id := Id, map_key := Map} = Character, Geometry) ->
@@ -231,7 +231,7 @@ broadcast(Tick, Players) ->
         maps:update_with(Map, fun(Rows) -> [Row | Rows] end, [Row], Acc)
     end, #{}, Visible),
     Frames = maps:map(fun(Map, Rows) ->
-        json:encode(#{type => <<"world_state">>, map_key => Map, tick => Tick, players => Rows})
+        iolist_to_binary(json:encode(#{type => <<"world_state">>, map_key => Map, tick => Tick, players => Rows}))
     end, Groups),
     maps:map(fun
         (Pid, #{ref := Ref, status := active, character := #{map_key := Map}, waiting := false} = Player) ->

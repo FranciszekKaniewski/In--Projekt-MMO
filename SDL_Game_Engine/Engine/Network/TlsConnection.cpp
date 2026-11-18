@@ -286,13 +286,13 @@ struct TlsConnection::Impl {
         SecureZeroMemory(frame.data(), frame.size());
     }
 
-    std::optional<std::string> receiveFrame(std::chrono::milliseconds timeout) {
+    std::optional<std::string> receiveFrame(std::chrono::milliseconds timeout, std::size_t maxBytes) {
         const auto deadline = Clock::now() + timeout;
         for(;;) {
             if(plaintext.size() >= 4) {
                 std::uint32_t length = 0;
                 for(int i = 0; i < 4; ++i) length = (length << 8) | static_cast<unsigned char>(plaintext[i]);
-                if(length > 4096) throw NetworkError("invalid_response");
+                if(length > maxBytes) throw NetworkError("invalid_response");
                 if(plaintext.size() >= length + 4) {
                     std::string result(plaintext.data() + 4, length);
                     plaintext.erase(plaintext.begin(), plaintext.begin() + length + 4);
@@ -320,7 +320,6 @@ struct TlsConnection::Impl {
                 const auto* begin = static_cast<char*>(buffer.pvBuffer);
                 plaintext.insert(plaintext.end(), begin, begin + buffer.cbBuffer);
             }
-            if(plaintext.size() > 65536) throw NetworkError("invalid_response");
             keepExtra(buffers, 4);
         }
     }
@@ -330,7 +329,9 @@ TlsConnection::TlsConnection(std::function<bool()> cancelled) : impl(std::make_u
 TlsConnection::~TlsConnection() = default;
 void TlsConnection::connect(const ServerConfig& config) { impl->connect(config); }
 void TlsConnection::sendFrame(const std::string& body, std::chrono::milliseconds timeout) { impl->sendFrame(body, timeout); }
-std::optional<std::string> TlsConnection::receiveFrame(std::chrono::milliseconds timeout) { return impl->receiveFrame(timeout); }
+std::optional<std::string> TlsConnection::receiveFrame(std::chrono::milliseconds timeout, std::size_t maxBytes) {
+    return impl->receiveFrame(timeout, maxBytes);
+}
 void TlsConnection::close() { impl->close(); }
 void TlsConnection::interrupt() {
     std::lock_guard<std::mutex> lock(impl->socketMutex);

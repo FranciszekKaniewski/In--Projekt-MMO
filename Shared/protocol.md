@@ -8,8 +8,10 @@ Każde nowe połączenie rozpoczyna się bez zalogowanego konta.
 ## Ramka
 
 Wewnątrz TLS każda wiadomość zawiera 4 bajty długości treści (unsigned,
-big-endian), a następnie obiekt JSON w UTF-8, maksymalnie 4096 bajtów.
-Dane mapy opisane poniżej są przesyłane jako osobne ramki z bajtami pliku.
+big-endian), a następnie obiekt JSON w UTF-8. Limit treści wynosi 4096 bajtów,
+z wyjątkiem zdarzeń `world_state`, które mogą mieć do 128 KiB (131 072 bajty).
+Dane mapy opisane poniżej są przesyłane jako osobne ramki z bajtami pliku,
+po maksymalnie 4096 bajtów.
 Długość nie obejmuje nagłówka. `{packet, 4}` w Erlangu składa pełną ramkę
 i usuwa nagłówek; klient musi sam obsłużyć fragmentację i łączenie danych.
 Ramka powyżej limitu zamyka połączenie.
@@ -99,7 +101,7 @@ atlasu `Assets/Graphics/TileSet_001.png`.
 Po załadowaniu TMJ klient wysyła `{"type":"enter_world"}`. `world_joined`
 zawiera obiekt `character` o tym samym formacie co `character_selected`,
 z pozycją startową ograniczoną do granic mapy. Jedna postać może mieć
-jedno aktywne wejście. Na jednej mapie może być do 10 postaci.
+jedno aktywne wejście. Serwer przyjmuje do 256 postaci na jednej mapie.
 
 ```json
 {"type":"move_input","seq":1,"dx":1,"dy":0}

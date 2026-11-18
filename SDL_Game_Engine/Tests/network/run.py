@@ -38,12 +38,12 @@ def receive(connection):
     return json.loads(receive_exact(connection, count))
 
 
-def send(connection, message):
+def send(connection, message, record_bytes=7):
     body = json.dumps(message, ensure_ascii=False).encode("utf-8")
     frame = struct.pack("!I", len(body)) + body
     # Split both the length header and multibyte UTF-8 names across TLS records.
-    for offset in range(0, len(frame), 7):
-        connection.sendall(frame[offset:offset + 7])
+    for offset in range(0, len(frame), record_bytes):
+        connection.sendall(frame[offset:offset + record_bytes])
 
 
 def run_case(mode, ca_file, tls_version):
@@ -114,12 +114,23 @@ def run_case(mode, ca_file, tls_version):
                         seq = message["seq"]
                         assert seq in (1, 2)
                         assert message == {"type": "move_input", "seq": seq, "dx": int(seq == 1), "dy": 0}
-                        send(connection, {"type": "world_state", "map_key": "map_expanded", "tick": 9 + seq,
-                                          "players": [
+                        players = [
                             dict(CHARACTER, position_x=1352 + 8 * seq, facing=2, moving=seq == 1,
                                  input_ack=seq, vx=160 if seq == 1 else 0, vy=0),
                             dict(CHARACTER, id=CHARACTER_ID + 1, name="Peer", moving=False,
-                                 input_ack=0, vx=0, vy=0)]})
+                                 input_ack=0, vx=0, vy=0),
+                        ]
+                        if seq == 2:
+                            players[1:1] = [
+                                {"id": CHARACTER_ID + index, "name": chr(0x1F400 + index) * 32,
+                                 "position_x": 1350.123456789, "position_y": 1320.123456789,
+                                 "facing": 1, "moving": True, "input_ack": 9223372036854775807,
+                                 "vx": 113.13708498984761, "vy": -113.13708498984761}
+                                for index in range(2, 256)
+                            ]
+                        send(connection, {"type": "world_state", "map_key": "map_expanded",
+                                          "tick": 9 + seq, "players": players},
+                             record_bytes=8192 if seq == 2 else 7)
                     elif kind == "chat_send" and mode == "world":
                         assert message in ({"type": "chat_send", "text": "Cześć!"}, {"type": "chat_send", "text": " "})
                         if message["text"] == " ":

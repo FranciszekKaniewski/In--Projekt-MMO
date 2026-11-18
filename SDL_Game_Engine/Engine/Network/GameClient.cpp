@@ -17,6 +17,8 @@ using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
 constexpr std::size_t maxMapBytes = 1024 * 1024;
 constexpr std::size_t mapFrameBytes = 4096;
+constexpr std::size_t maxMessageBytes = 4096;
+constexpr std::size_t maxWorldStateBytes = 128 * 1024;
 constexpr std::size_t maxChatBytes = 256 * 4;
 constexpr std::size_t maxQueuedChatMessages = 100;
 constexpr auto pingInterval = std::chrono::seconds(1);
@@ -138,11 +140,13 @@ class AsyncGameClient final : public GameClient {
         if(activeGeneration != generation.load() || stopping || !inWorld) return;
         const auto& rows = message.at("players");
         if(!selected || message.at("map_key") != selected->mapKey || !rows.is_array() ||
-           rows.empty() || rows.size() > 10) throw NetworkError("invalid_response");
+           rows.empty()) throw NetworkError("invalid_response");
         WorldSnapshot snapshot;
         snapshot.tick = integer(message.at("tick"));
         if(snapshot.tick <= latestWorldTick) return;
+        snapshot.players.reserve(rows.size());
         std::unordered_set<std::int64_t> ids;
+        ids.reserve(rows.size());
         for(const auto& row : rows) {
             auto player = decodePlayer(row);
             if(!ids.insert(player.id).second) throw NetworkError("invalid_response");
@@ -197,15 +201,29 @@ class AsyncGameClient final : public GameClient {
         return true;
     }
 
+    std::optional<Json> receiveMessage(std::chrono::milliseconds timeout) {
+        std::size_t limit;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            limit = inWorld ? maxWorldStateBytes : maxMessageBytes;
+        }
+        const auto frame = connection.receiveFrame(timeout, limit);
+        if(!frame) return std::nullopt;
+        auto message = Json::parse(*frame);
+        if(frame->size() > maxMessageBytes && message.value("type", "") != "world_state")
+            throw NetworkError("invalid_response");
+        return message;
+    }
+
     ServerReply receiveReply(const Command& command, std::chrono::milliseconds timeout) {
         const auto deadline = Clock::now() + timeout;
         Json header;
         do {
             const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(deadline - Clock::now());
             if(remaining.count() <= 0) throw NetworkError("connection_timeout");
-            const auto frame = connection.receiveFrame(remaining);
-            if(!frame) throw NetworkError("connection_timeout");
-            header = Json::parse(*frame);
+            auto message = receiveMessage(remaining);
+            if(!message) throw NetworkError("connection_timeout");
+            header = std::move(*message);
         } while(handleEvent(header));
         if(command.body.at("type") != "get_map" || header.at("type") == "error")
             return decode(header, command);
@@ -222,7 +240,7 @@ class AsyncGameClient final : public GameClient {
         while(reply.mapData.size() < static_cast<std::size_t>(size)) {
             const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(deadline - Clock::now());
             if(remaining.count() <= 0) throw NetworkError("connection_timeout");
-            const auto chunk = connection.receiveFrame(remaining);
+            const auto chunk = connection.receiveFrame(remaining, mapFrameBytes);
             if(!chunk) throw NetworkError("connection_timeout");
             if(chunk->size() != std::min(mapFrameBytes, static_cast<std::size_t>(size) - reply.mapData.size()))
                 throw NetworkError("invalid_response");
@@ -329,13 +347,11 @@ class AsyncGameClient final : public GameClient {
                         nextPing = now + pingInterval;
                         connection.sendFrame(R"({"type":"ping"})", std::chrono::milliseconds(config.timeoutMs));
                     }
-                    const auto frame = connection.receiveFrame(idleWait);
-                    if(!frame) continue;
-                    const auto message = Json::parse(*frame);
-                    if(handleEvent(message)) continue;
-                    if(message.value("type", "") != "error") throw NetworkError("invalid_response");
+                    const auto message = receiveMessage(idleWait);
+                    if(!message || handleEvent(*message)) continue;
+                    if(message->value("type", "") != "error") throw NetworkError("invalid_response");
                     ServerReply failure;
-                    failure.error = text(message.at("code"), 64);
+                    failure.error = text(message->at("code"), 64);
                     connection.close(); connected = false; clearSession(activeGeneration);
                     post(std::move(failure), activeGeneration);
                 }

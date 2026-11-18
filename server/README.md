@@ -115,6 +115,36 @@ Zależność `jargon` 1.1.0 jest przypięta w `rebar.lock`.
 i poprawia numer wersji w wrapperze z dziesiętnego `13` na `0x13` (v19).
 Test sprawdza wynik względem opublikowanego wektora Argon2id.
 
+## Test obciążeniowy
+
+Na lokalnej instancji testowej można podnieść limit logowań do następnego
+restartu. Wykonaj poniższe polecenie w powłoce Erlanga.
+
+```erlang
+application:set_env(server, login_ip_limit, 1000).
+```
+
+Możesz też uruchomić instancję testową z tym ustawieniem przez PowerShell.
+
+```powershell
+rebar3 shell --eval "application:set_env(server, login_ip_limit, 1000)."
+```
+
+W drugim terminalu uruchom test na wcześniej utworzonych kontach z katalogu
+`server`.
+
+```powershell
+python tools/tests/test1.py 200 60 --batch-size 200 --logins-per-minute 1000 --workers 4
+```
+
+`--batch-size` ustala liczbę postaci grających jednocześnie. `--workers` rozdziela
+te postacie między osobne procesy Pythona. Budżet `--logins-per-minute` dotyczy
+wszystkich procesów łącznie. Symulacja przez podany czas zaczyna się po zalogowaniu
+i wejściu do świata całej grupy. Dla większej liczby kont użyj kolejnych grup,
+np. `1000 60 --batch-size 200 --logins-per-minute 1000`. Limit jednej mapy to
+256 postaci, a domyślny limit serwera to 256 połączeń TLS. Zwykły restart
+serwera wczytuje limit 30 logowań na minutę z `config/sys.config`.
+
 ## PostgreSQL w Dockerze
 
 Baza PostgreSQL działa w kontenerze, a serwer Erlanga lokalnie przez
@@ -215,7 +245,8 @@ Istotne opcje:
 
 - `binary`: treść otrzymujemy jako binaria Erlanga.
 - `{packet, 4}`: wiadomość ma czterobajtowy nagłówek długości.
-- `{packet_size, 4096}`: treść jednej wiadomości może mieć najwyżej 4096 bajtów.
+- `{packet_size, 4096}`: serwer odbiera ramki o treści do 4096 bajtów.
+  Klient odbiera także stany świata, których treść może mieć do 128 KiB.
 - `{active, false}`: na początku dane nie są dostarczane jako wiadomości do procesu.
 - `{nodelay, true}`: małe wysyłane wiadomości nie czekają na agregowanie przez Nagle'a.
 

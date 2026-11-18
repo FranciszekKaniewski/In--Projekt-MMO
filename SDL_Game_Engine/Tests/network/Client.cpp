@@ -96,7 +96,8 @@ int wmain(int argc, wchar_t** argv) {
                         "Chat events lost content, order or identity");
                 const auto first = client->pollWorld();
                 const auto state = client->pollWorld();
-                require(first && first->tick == 10 && state && state->tick == 11 && state->players.size() == 2 &&
+                require(first && first->tick == 10 && first->players.size() == 2 &&
+                        state && state->tick == 11 && state->players.size() == 256 &&
                         state->players.front().id == 9007199254741009LL && state->players.front().x == 1368 &&
                         state->players.front().inputAck == 2 && !state->players.front().moving &&
                         state->players.back().name == "Peer" && !client->pollWorld(),

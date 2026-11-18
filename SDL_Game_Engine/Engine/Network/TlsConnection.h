@@ -2,6 +2,7 @@
 
 #include "GameClient.h"
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -19,7 +20,7 @@ public:
     ~TlsConnection();
     void connect(const ServerConfig& config);
     void sendFrame(const std::string& body, std::chrono::milliseconds timeout);
-    std::optional<std::string> receiveFrame(std::chrono::milliseconds timeout);
+    std::optional<std::string> receiveFrame(std::chrono::milliseconds timeout, std::size_t maxBytes);
     void close(); // Worker thread only.
     void interrupt(); // Thread-safe cancellation of pending socket operations.
 
